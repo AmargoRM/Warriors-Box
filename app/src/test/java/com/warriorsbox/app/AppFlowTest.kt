@@ -3,6 +3,7 @@ package com.warriorsbox.app
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -74,7 +75,7 @@ class AppFlowTest {
         // Semana 1, lunes
         rule.waitUntilAtLeastOneExists(hasTestTag("dia_1_0"), timeout)
         rule.onNodeWithTag("dia_1_0").performClick()
-        rule.waitUntilAtLeastOneExists(hasTestTag("empezar_sesion"), timeout)
+        rule.waitUntilAtLeastOneExists(hasTestTag("empezar_sesion") and isEnabled(), timeout)
         rule.onNodeWithTag("empezar_sesion").performClick()
 
         // Marcar la primera serie del primer ejercicio
