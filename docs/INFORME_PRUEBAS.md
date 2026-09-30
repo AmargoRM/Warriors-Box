@@ -11,7 +11,7 @@ Dónde se corrieron: GitHub Actions (servidores de GitHub), en el flujo **"Compi
 | App Android (`:app`, Robolectric) | 13 | ✅ todas pasan |
 | Análisis de código (Android lint) | — | ✅ sin errores |
 | Compilación del APK | — | ✅ |
-| Emuladores (Android 8.0, 11, 14 y 15) | 4 | ver sección "Emuladores" |
+| Emuladores (Android 8.0, 11, 14 y 15) | 4 | ✅ la app abre, entra a Usuarios y Rutinas y no se cierra |
 
 ## Qué se probó
 
@@ -91,6 +91,8 @@ El flujo **"Probar en emuladores"** hace lo siguiente en Android 8.0 (API 26), 1
 4. Verifica que la app no se cierre sola.
 
 Las capturas quedan como archivos descargables del run.
+
+Resultado del 30/09/2026: ✅ pasó en las 4 versiones.
 
 ## Limitaciones conocidas (lo que las pruebas NO cubren)
 
