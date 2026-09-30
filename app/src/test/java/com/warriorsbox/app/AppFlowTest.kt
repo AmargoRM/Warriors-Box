@@ -50,13 +50,16 @@ class AppFlowTest {
         rule.waitUntilAtLeastOneExists(hasTestTag("campo_peso"), timeout)
         rule.onNodeWithTag("campo_peso").performTextInput("75")
         rule.onNodeWithTag("campo_altura").performTextInput("175")
-        repeat(4) {
+        // Pasos 2 → 6 y luego "Guardar"
+        repeat(5) {
             rule.onNodeWithTag("siguiente").performClick()
             rule.waitForIdle()
         }
-        // Aviso de "no reemplaza a un profesional"
-        rule.waitUntilAtLeastOneExists(hasText("Entendido"), timeout)
-        rule.onNodeWithText("Entendido").performClick()
+        // Aviso de "no reemplaza a un profesional" (solo la primera vez)
+        rule.waitUntilAtLeastOneExists(hasText("Entendido").or(hasTestTag("elegir_Tester")), timeout)
+        if (rule.onAllNodes(hasText("Entendido")).fetchSemanticsNodes().isNotEmpty()) {
+            rule.onNodeWithText("Entendido").performClick()
+        }
 
         // ¿Quién entrena hoy?
         rule.waitUntilAtLeastOneExists(hasTestTag("elegir_Tester"), timeout)
