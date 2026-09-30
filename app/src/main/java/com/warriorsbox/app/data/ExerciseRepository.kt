@@ -58,7 +58,7 @@ class ExerciseRepository(private val context: Context, private val extraDao: Ext
         // Los sincronizados que ya existen con el mismo nombre se omiten para no duplicar.
         val baseIds = base.map { it.id }.toSet()
         val cleanExtras = extras.filter { it.custom || it.id in baseIds || it.name.lowercase() !in baseNames }
-        return base.filter { it.id !in extraIds } + cleanExtras
+        return withFallbackImages(base.filter { it.id !in extraIds } + cleanExtras)
     }
 
     suspend fun saveCustom(exercise: Exercise) {
@@ -81,4 +81,33 @@ class ExerciseRepository(private val context: Context, private val extraDao: Ext
     suspend fun countBySource(): Map<String, Int> = extraDao.all().groupingBy { it.source }.eachCount()
 
     suspend fun first(): List<Exercise> = all.first()
+
+    companion object {
+        private fun words(s: String?): Set<String> =
+            s.orEmpty().lowercase().split(Regex("[^a-záéíóúñü0-9]+")).filter { it.length > 3 }.toSet()
+
+        /**
+         * Ejercicios sin imagen (propios o de internet): usan la imagen del ejercicio más parecido
+         * (palabras del nombre, mismo movimiento y mismo músculo principal).
+         */
+        fun withFallbackImages(list: List<Exercise>): List<Exercise> {
+            if (list.all { it.image != null || it.imageUrls.isNotEmpty() }) return list
+            val withImages = list.filter { it.image != null || it.imageUrls.isNotEmpty() }
+                .map { it to (words(it.name) + words(it.nameEn)) }
+            if (withImages.isEmpty()) return list
+            return list.map { e ->
+                if (e.image != null || e.imageUrls.isNotEmpty()) return@map e
+                val names = words(e.name) + words(e.nameEn)
+                val best = withImages.maxByOrNull { (o, oWords) ->
+                    val shared = oWords.count { it in names }
+                    shared * 10 +
+                        (if (o.pattern == e.pattern) 6 else 0) +
+                        (if (o.primaryMuscles.firstOrNull() == e.primaryMuscles.firstOrNull()) 5 else 0) +
+                        (if (o.curated) 2 else 0) +
+                        (if (o.equipment == e.equipment) 1 else 0)
+                }?.first ?: return@map e
+                e.copy(image = best.image, imageUrls = best.imageUrls)
+            }
+        }
+    }
 }

@@ -146,7 +146,10 @@ fun WbCard(modifier: Modifier = Modifier, highlight: Boolean = false, content: @
             if (highlight) Modifier.border(2.dp, WbGold, RoundedCornerShape(18.dp)) else Modifier,
         ),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
     ) {
         Column(Modifier.padding(16.dp), content = content)
     }

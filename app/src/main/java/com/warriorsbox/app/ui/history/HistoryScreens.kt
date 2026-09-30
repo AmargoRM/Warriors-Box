@@ -78,7 +78,7 @@ fun HistoryScreen(userId: Long, onBack: () -> Unit, onExercise: (String) -> Unit
     val trainedDays = completed.map { Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() }.toSet()
 
     AppBackground(user?.backgroundPath ?: settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("Historial · ${user?.name ?: ""}", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Historial · ${user?.name ?: ""}", onBack) }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -181,7 +181,7 @@ fun ProgressScreen(userId: Long, exerciseId: String, onBack: () -> Unit) {
     val lb = settings.useLb
     fun w(v: Double) = if (lb) Units.kgToLb(v) else v
     AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar(exercise?.name ?: "Progreso", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar(exercise?.name ?: "Progreso", onBack) }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),

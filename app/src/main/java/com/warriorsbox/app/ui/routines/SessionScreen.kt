@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -181,6 +182,7 @@ fun SessionScreen(
     AppBackground(user?.backgroundPath ?: settings.backgroundPath, settings.veil) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = Color.White,
             topBar = {
                 WbTopBar(title, onBack) {
                     if (started) IconButton(onClick = { confirmDiscard = true }) { Icon(Icons.Filled.Close, "Descartar sesión") }
@@ -189,7 +191,7 @@ fun SessionScreen(
             bottomBar = {
                 Column(Modifier.navigationBarsPadding()) {
                     if (vm.restEndsAt != null) RestBar(vm)
-                    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)) {
+                    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), contentColor = MaterialTheme.colorScheme.onSurface) {
                         Row(Modifier.fillMaxWidth().padding(12.dp)) {
                             if (!started) {
                                 Button(
@@ -296,9 +298,41 @@ fun SessionScreen(
     }
 }
 
+/** Series, repeticiones, peso y descanso en grande, fáciles de leer en el gimnasio. */
+@Composable
+fun TargetStats(item: PlanItemEntity, exercise: Exercise?, useLb: Boolean, modifier: Modifier = Modifier) {
+    val cardio = exercise?.pattern == MovementPattern.CARDIO
+    val timed = exercise?.timed == true
+    val reps = when {
+        cardio -> Units.formatDuration(item.repsMax)
+        timed -> "${item.repsMin}–${item.repsMax} s"
+        item.repsMin == item.repsMax -> "${item.repsMin}"
+        else -> "${item.repsMin}–${item.repsMax}"
+    }
+    val perSide = exercise?.unilateral == true && !timed
+    val each = exercise?.equipment?.any { it.name == "DUMBBELL" || it.name == "KETTLEBELL" } == true
+    val stats = buildList {
+        if (!cardio) add("${item.sets}" to "series")
+        add(reps to if (cardio) "duración" else if (timed) "tiempo" else if (perSide) "reps por lado" else "repeticiones")
+        add((if (item.weightKg > 0) Units.formatWeight(item.weightKg, useLb) else "—") to if (item.weightKg > 0 && each) "peso c/u" else if (item.weightKg > 0) "peso" else "sin peso")
+        if (item.restSec > 0) add(Units.formatDuration(item.restSec) to "descanso")
+    }
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        stats.forEach { (value, label) ->
+            Column(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(vertical = 8.dp, horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(value, color = WbGold, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, maxLines = 1)
+            }
+        }
+    }
+}
+
 @Composable
 private fun RestBar(vm: SessionViewModel) {
-    Surface(color = WbBlue) {
+    Surface(color = WbBlue, contentColor = Color.White) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Descanso: ${Units.formatDuration(vm.restRemaining)}", color = Color.White, fontWeight = FontWeight.Bold)
@@ -344,14 +378,14 @@ private fun ExerciseCard(
             if (allDone) Icon(Icons.Filled.CheckCircle, "Completado", tint = WbGreen)
         }
         if (substitutedToday) Text("Reemplazo solo por hoy", color = WbGold, style = MaterialTheme.typography.labelMedium)
-        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ExerciseImage(exercise, Modifier.width(130.dp).height(110.dp).clickable(onClick = onInfo))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val tip = exercise?.tip ?: exercise?.steps?.firstOrNull()
-                if (tip != null) TipBox(tip)
-                if (previous != null) Text(previous, style = MaterialTheme.typography.labelMedium)
-            }
-        }
+        TargetStats(item, exercise, useLb, Modifier.padding(top = 10.dp))
+        ExerciseImage(
+            exercise,
+            Modifier.padding(top = 10.dp).fillMaxWidth().aspectRatio(16f / 10f).clickable(onClick = onInfo),
+        )
+        val tip = exercise?.tip ?: exercise?.steps?.firstOrNull()
+        if (tip != null) TipBox(tip, Modifier.padding(top = 8.dp))
+        if (previous != null) Text(previous, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp))
         item.trainerNote?.takeIf { it.isNotBlank() }?.let { TipBox("Entrenador: $it", Modifier.padding(top = 6.dp), color = WbGold) }
         note?.takeIf { it.isNotBlank() }?.let { Text("Tu nota: $it", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 4.dp)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {

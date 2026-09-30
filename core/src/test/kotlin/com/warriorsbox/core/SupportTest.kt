@@ -108,3 +108,17 @@ class SupportTest {
         assertTrue(lunge.isBodyweight)
     }
 }
+
+class RoastsTest {
+    @Test
+    fun roastsFillPlaceholders() {
+        val r = com.warriorsbox.core.engine.Roasts
+        repeat(50) {
+            val text = r.reminder("Pierna", kotlin.random.Random(it))
+            org.junit.Assert.assertFalse(text.contains("{"))
+            org.junit.Assert.assertFalse(r.missed(4, kotlin.random.Random(it)).contains("{"))
+        }
+        org.junit.Assert.assertTrue(r.reminders.any { it.contains("carepicha") })
+        org.junit.Assert.assertEquals("3 días", r.fill("{n} días", days = 3))
+    }
+}

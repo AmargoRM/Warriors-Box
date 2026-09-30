@@ -52,6 +52,10 @@ data class PlanTransferFile(
     )
 }
 
+const val CUSTOM_SUMMARY = "Rutina armada por ti: elige los ejercicios de cada día."
+const val REST_FOCUS = "Descanso"
+const val CUSTOM_FOCUS = "Mi rutina"
+
 class PlanRepository(
     private val db: AppDatabase,
     private val exercises: ExerciseRepository,
@@ -103,6 +107,40 @@ class PlanRepository(
         return planId to generated
     }
 
+    /**
+     * Rutina armada por el usuario: plan vacío de 5 semanas × 6 días. Los días sin ejercicios
+     * cuentan como descanso; al agregar ejercicios pasan a ser días de entrenamiento.
+     */
+    suspend fun createCustom(userId: Long): Long = db.withTransaction {
+        dao.deactivatePlans(userId)
+        val planId = dao.insertPlan(
+            PlanEntity(
+                userId = userId,
+                cycle = (dao.maxCycle(userId) ?: 0) + 1,
+                summary = CUSTOM_SUMMARY,
+            ),
+        )
+        for (w in 1..PlanGenerator.WEEKS) for (d in 0 until PlanGenerator.DAYS) {
+            dao.insertDay(PlanDayEntity(planId = planId, week = w, dayIndex = d, focus = REST_FOCUS, optional = true))
+        }
+        planId
+    }
+
+    suspend fun renameDay(dayId: Long, focus: String) {
+        val day = dao.day(dayId) ?: return
+        dao.updateDay(day.copy(focus = focus.trim().ifBlank { day.focus }))
+    }
+
+    /** Un día con ejercicios es de entrenamiento; uno vacío, de descanso. */
+    private suspend fun syncDayKind(dayId: Long) {
+        val day = dao.day(dayId) ?: return
+        val hasItems = dao.items(dayId).isNotEmpty()
+        when {
+            hasItems && day.optional && day.focus == REST_FOCUS -> dao.updateDay(day.copy(optional = false, focus = CUSTOM_FOCUS))
+            !hasItems && !day.optional -> dao.updateDay(day.copy(optional = true, focus = REST_FOCUS))
+        }
+    }
+
     /** Último peso usado por ejercicio (para empezar el nuevo ciclo donde quedaste). */
     suspend fun lastWeights(userId: Long): Map<String, Double> =
         sessionDao.allHistory(userId).groupBy { it.exerciseId }.mapValues { (_, rows) -> rows.last().weightKg }
@@ -119,6 +157,7 @@ class PlanRepository(
     /** Primera semana con días obligatorios sin completar. */
     fun currentWeek(days: List<PlanDayEntity>, sessions: List<SessionEntity>): Int {
         val done = sessions.filter { it.completed }.mapNotNull { it.dayId }.toSet()
+        if (days.none { !it.optional }) return 1 // rutina propia todavía sin ejercicios
         return days.filter { !it.optional && it.id !in done }.minOfOrNull { it.week } ?: PlanGenerator.WEEKS
     }
 
@@ -206,6 +245,7 @@ class PlanRepository(
                 restSec = rx.restSec, reason = "Agregado manualmente.",
             ),
         )
+        syncDayKind(dayId)
     }
 
     suspend fun updateItem(item: PlanItemEntity) = dao.updateItem(item)
@@ -213,6 +253,7 @@ class PlanRepository(
     suspend fun removeItem(item: PlanItemEntity) = db.withTransaction {
         dao.deleteItem(item)
         dao.updateItems(dao.items(item.dayId).mapIndexed { i, it -> it.copy(position = i) })
+        syncDayKind(item.dayId)
     }
 
     suspend fun moveItem(item: PlanItemEntity, delta: Int) = db.withTransaction {
@@ -238,6 +279,7 @@ class PlanRepository(
         for (w in weeks) {
             if (w == source.week) continue
             val target = dao.dayAt(source.planId, w, source.dayIndex) ?: continue
+            dao.updateDay(target.copy(focus = source.focus, optional = source.optional))
             dao.deleteItemsOfDay(target.id)
             dao.insertItems(
                 items.map {

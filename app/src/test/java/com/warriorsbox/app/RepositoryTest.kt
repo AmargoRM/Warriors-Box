@@ -208,4 +208,41 @@ class RepositoryTest {
         assertEquals(1, students.size)
         assertTrue(students[0].alerts.any { it.contains("no registra") })
     }
+
+    @Test
+    fun customRoutineStartsEmptyAndDaysBecomeTrainingDays() = runBlocking {
+        val userId = newUser()
+        val planId = c.plans.createCustom(userId)
+        val days = c.plans.daysNow(planId)
+        assertEquals(30, days.size)
+        assertTrue(days.all { it.optional && c.plans.itemsNow(it.id).isEmpty() })
+        assertEquals(1, c.plans.currentWeek(days, emptyList()))
+        val monday = days.first { it.week == 1 && it.dayIndex == 0 }
+        c.plans.addItem(monday.id, c.exercises.get("prensa-piernas")!!, userId)
+        val updated = c.plans.dayNow(monday.id)!!
+        assertTrue(!updated.optional)
+        c.plans.renameDay(monday.id, "Pierna pesada")
+        c.plans.copyDayToWeeks(monday.id, listOf(2, 3))
+        val week2 = c.plans.daysNow(planId).first { it.week == 2 && it.dayIndex == 0 }
+        assertEquals("Pierna pesada", week2.focus)
+        assertEquals(1, c.plans.itemsNow(week2.id).size)
+        c.plans.removeItem(c.plans.itemsNow(monday.id).first())
+        assertTrue(c.plans.dayNow(monday.id)!!.optional)
+    }
+
+    @Test
+    fun exercisesWithoutImageBorrowTheClosestOne() = runBlocking {
+        c.exercises.saveCustom(
+            com.warriorsbox.core.model.Exercise(
+                id = "propio-prensa-rara", name = "Prensa de piernas rara",
+                pattern = com.warriorsbox.core.model.MovementPattern.SQUAT,
+                primaryMuscles = listOf(com.warriorsbox.core.model.Muscle.QUADS),
+                equipment = setOf(com.warriorsbox.core.model.Equipment.MACHINE),
+            ),
+        )
+        val mine = c.exercises.get("propio-prensa-rara")!!
+        assertTrue(mine.image != null || mine.imageUrls.isNotEmpty())
+        assertTrue(c.exercises.allNow().filter { it.curated }.all { it.image != null })
+    }
+
 }

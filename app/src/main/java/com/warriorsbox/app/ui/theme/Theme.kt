@@ -1,11 +1,13 @@
 package com.warriorsbox.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -83,9 +85,9 @@ val ButtonText = TextStyle(fontFamily = Stencil, fontSize = 22.sp, letterSpacing
 @Composable
 fun WarriorsTheme(forceDark: Boolean = true, content: @Composable () -> Unit) {
     val dark = forceDark || isSystemInDarkTheme()
-    MaterialTheme(
-        colorScheme = if (dark) DarkColors else LightColors,
-        typography = WbTypography,
-        content = content,
-    )
+    val colors = if (dark) DarkColors else LightColors
+    MaterialTheme(colorScheme = colors, typography = WbTypography) {
+        // Color de texto por defecto: nunca negro sobre fondo oscuro.
+        CompositionLocalProvider(LocalContentColor provides colors.onBackground, content = content)
+    }
 }

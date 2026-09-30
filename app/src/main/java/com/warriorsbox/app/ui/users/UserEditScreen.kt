@@ -212,6 +212,7 @@ fun UserEditScreen(userId: Long, onBack: () -> Unit, onSaved: (Long) -> Unit) {
     AppBackground(settings.backgroundPath, settings.veil) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = Color.White,
             topBar = { WbTopBar(if (userId == 0L) "Nuevo usuario" else "Editar usuario", onBack) },
             bottomBar = {
                 Row(Modifier.fillMaxWidth().padding(16.dp).imePadding(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

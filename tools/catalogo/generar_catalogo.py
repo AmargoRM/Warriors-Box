@@ -21,7 +21,7 @@ import time
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(__file__))
-from curado import EJERCICIOS, P, M, E, L, Z  # noqa: E402
+from curado import EJERCICIOS, IMAGEN_SUSTITUTA, P, M, E, L, Z  # noqa: E402
 
 RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SALIDA = os.path.join(RAIZ, "app", "src", "main", "assets", "catalog")
@@ -170,7 +170,10 @@ def main():
             assert fedb_id in fedb_por_id, "no existe en free-exercise-db: " + fedb_id
             usados.add(fedb_id)
         equipo = sorted({E[e] for e in eq.split()} - {"NONE"})
-        urls = [FEDB_IMG + i for i in fedb_por_id[fedb_id].get("images", [])] if fedb_id else []
+        img_id = fedb_id or IMAGEN_SUSTITUTA.get(ej_id)
+        if img_id:
+            assert img_id in fedb_por_id, "imagen sustituta inexistente: " + img_id
+        urls = [FEDB_IMG + i for i in fedb_por_id[img_id].get("images", [])] if img_id else []
         salida.append({
             "id": ej_id,
             "name": nombre,
@@ -184,7 +187,7 @@ def main():
             "compound": bool(comp),
             "steps": pasos,
             "tip": consejo,
-            "image": imagen_local(fedb_id, ej_id, fedb_por_id, con_imagenes),
+            "image": imagen_local(img_id, ej_id, fedb_por_id, con_imagenes),
             "imageUrls": urls,
             "curated": True,
             "unilateral": bool(uni),

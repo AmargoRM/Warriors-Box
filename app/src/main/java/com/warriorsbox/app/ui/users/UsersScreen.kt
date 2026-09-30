@@ -83,6 +83,7 @@ fun UsersScreen(onBack: () -> Unit, onAdd: () -> Unit, onOpen: (Long) -> Unit) {
     AppBackground(settings.backgroundPath, settings.veil) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = Color.White,
             topBar = { WbTopBar("Usuarios", onBack) },
             floatingActionButton = {
                 ExtendedFloatingActionButton(

@@ -98,7 +98,7 @@ fun SettingsScreen(
     }
 
     AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("Ajustes", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Ajustes", onBack) }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),

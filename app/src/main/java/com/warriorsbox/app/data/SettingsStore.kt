@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -30,6 +31,8 @@ data class AppSettings(
     val disclaimerShown: Boolean = false,
     val lastBackupAt: Long = 0,
     val lastPhrase: String? = null,
+    /** Usuarios con "modo sin filtro" (recordatorios groseros). */
+    val rudeUsers: Set<Long> = emptySet(),
 )
 
 class SettingsStore(private val context: Context) {
@@ -48,6 +51,7 @@ class SettingsStore(private val context: Context) {
         val disclaimerShown = booleanPreferencesKey("aviso_mostrado")
         val lastBackupAt = longPreferencesKey("ultima_copia")
         val lastPhrase = stringPreferencesKey("ultima_frase")
+        val rudeUsers = stringSetPreferencesKey("modo_sin_filtro")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -65,6 +69,7 @@ class SettingsStore(private val context: Context) {
             disclaimerShown = p[Keys.disclaimerShown] ?: false,
             lastBackupAt = p[Keys.lastBackupAt] ?: 0,
             lastPhrase = p[Keys.lastPhrase],
+            rudeUsers = p[Keys.rudeUsers].orEmpty().mapNotNull { it.toLongOrNull() }.toSet(),
         )
     }
 
@@ -93,6 +98,11 @@ class SettingsStore(private val context: Context) {
     suspend fun setLastCatalogSync(time: Long) = context.dataStore.edit { it[Keys.lastCatalogSync] = time }
     suspend fun setDisclaimerShown() = context.dataStore.edit { it[Keys.disclaimerShown] = true }
     suspend fun setLastBackupAt(time: Long) = context.dataStore.edit { it[Keys.lastBackupAt] = time }
+    suspend fun setRude(userId: Long, enabled: Boolean) = context.dataStore.edit {
+        val current = it[Keys.rudeUsers].orEmpty()
+        it[Keys.rudeUsers] = if (enabled) current + userId.toString() else current - userId.toString()
+    }
+
     suspend fun setLastPhrase(text: String) = context.dataStore.edit { it[Keys.lastPhrase] = text }
 
     /** Para copias de seguridad: los ajustes visibles (no el PIN). */

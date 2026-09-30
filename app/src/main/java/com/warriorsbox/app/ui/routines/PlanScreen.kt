@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -101,6 +102,17 @@ class PlanViewModel(val c: AppContainer, val userId: Long) : ViewModel() {
     var generating by mutableStateOf(false)
     var lastResult by mutableStateOf<Pair<String, List<String>>?>(null)
 
+    fun createCustom() = viewModelScope.launch {
+        generating = true
+        runCatching { c.plans.createCustom(userId) }
+            .onSuccess {
+                lastResult = "Rutina vacía creada. Toca el lápiz ✎ de cada día para agregar tus ejercicios, " +
+                    "con sus series, repeticiones y peso. Luego usa \"Copiar a otras semanas\" para repetirla." to emptyList()
+            }
+            .onFailure { lastResult = "No se pudo crear la rutina: ${it.message}" to emptyList() }
+        generating = false
+    }
+
     fun generate(newCycle: Boolean) = viewModelScope.launch {
         generating = true
         runCatching { c.plans.generate(userId, newCycle) }
@@ -156,6 +168,7 @@ fun PlanScreen(
     AppBackground(user?.backgroundPath ?: settings.backgroundPath, settings.veil) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = Color.White,
             topBar = {
                 WbTopBar(user?.name ?: "Rutina", onBack) {
                     IconButton(onClick = onHistory) { Icon(Icons.Filled.History, "Historial") }
@@ -169,6 +182,10 @@ fun PlanScreen(
                         DropdownMenuItem(text = { Text("Regenerar plan desde el perfil") }, onClick = {
                             menu = false
                             guard.run { confirm = "regenerar" }
+                        })
+                        DropdownMenuItem(text = { Text("Armar mi propia rutina (desde cero)") }, onClick = {
+                            menu = false
+                            guard.run { confirm = "propia" }
                         })
                         DropdownMenuItem(text = { Text("Editar perfil") }, onClick = {
                             menu = false
@@ -202,6 +219,15 @@ fun PlanScreen(
                             enabled = !vm.generating,
                             modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("generar_plan"),
                         ) { Text(if (vm.generating) "Generando…" else "Generar mi plan") }
+                        OutlinedButton(
+                            onClick = { guard.run { vm.createCustom() } },
+                            enabled = !vm.generating,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("rutina_propia"),
+                        ) { Text("Armar mi propia rutina") }
+                        Text(
+                            "Con \"Armar mi propia rutina\" eliges tú cada ejercicio, sus series, repeticiones y peso.",
+                            style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp),
+                        )
                     }
                 }
                 else -> PlanContent(ui, week, currentWeek, Modifier.padding(padding), onSelectWeek = { selectedWeek = it }, onOpenDay = onOpenDay,
@@ -214,12 +240,17 @@ fun PlanScreen(
     vm.lastResult?.let { (summary, warnings) ->
         AlertDialog(
             onDismissRequest = { vm.lastResult = null },
-            title = { Text("Tu plan está listo") },
+            title = { Text(if (summary.startsWith("Rutina vacía")) "Tu rutina" else "Tu plan está listo") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(summary); warnings.forEach { Text("• $it") } } },
             confirmButton = { TextButton(onClick = { vm.lastResult = null }) { Text("¡Vamos!") } },
         )
     }
     when (confirm) {
+        "propia" -> ConfirmDialog(
+            "Armar mi propia rutina", "Se crea una rutina vacía de 5 semanas × 6 días para que elijas cada ejercicio. " +
+                "El plan actual se reemplaza; las sesiones ya registradas se conservan en el historial.",
+            "Crear", { confirm = null; vm.createCustom() }, { confirm = null },
+        )
         "ciclo" -> ConfirmDialog(
             "Nuevo ciclo", "Se crea un plan nuevo de 5 semanas partiendo de los últimos pesos que usaste. El historial se conserva.",
             "Crear", { confirm = null; vm.generate(true) }, { confirm = null },
@@ -245,6 +276,9 @@ private fun PlanContent(
     onEditDay: (Long) -> Unit,
 ) {
     val c = container()
+    val useLb = c.settings.settings.collectAsStateWithLifecycle(com.warriorsbox.app.data.AppSettings()).value.useLb
+    var catalog by remember { mutableStateOf<Map<String, com.warriorsbox.core.model.Exercise>>(emptyMap()) }
+    LaunchedEffect(ui.items.size) { catalog = c.exercises.byId() }
     val mandatory = ui.days.filter { !it.optional }
     val doneIds = ui.sessions.filter { it.completed }.mapNotNull { it.dayId }.toSet()
     val doneCount = mandatory.count { it.id in doneIds }
@@ -257,7 +291,7 @@ private fun PlanContent(
                 TipBox("¡Terminaste el ciclo! Usa el menú ⋮ → \"Nuevo ciclo de 5 semanas\" para seguir progresando.", color = WbGreen)
             }
         }
-        PrimaryScrollableTabRow(selectedTabIndex = week - 1, containerColor = Color.Transparent, edgePadding = 16.dp) {
+        PrimaryScrollableTabRow(selectedTabIndex = week - 1, containerColor = Color.Transparent, contentColor = Color.White, edgePadding = 16.dp) {
             (1..PlanGenerator.WEEKS).forEach { w ->
                 Tab(
                     selected = week == w,
@@ -278,6 +312,16 @@ private fun PlanContent(
                             Text("$count ejercicios" + if (day.deload) " · semana de descarga" else "", style = MaterialTheme.typography.labelMedium)
                         }
                         IconButton(onClick = { onEditDay(day.id) }) { Icon(Icons.Filled.Edit, "Editar día") }
+                    }
+                    ui.items.filter { it.dayId == day.id }.sortedBy { it.position }.forEachIndexed { i, item ->
+                        val ex = catalog[item.exerciseId]
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                            Text("${i + 1}. ${ex?.name ?: item.exerciseId}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                shortPrescription(item, ex, useLb),
+                                color = WbGold, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(
@@ -306,4 +350,14 @@ private fun PlanContent(
             }
         }
     }
+}
+
+/** "3×8–10 · 40 kg" para las listas. */
+fun shortPrescription(item: PlanItemEntity, exercise: com.warriorsbox.core.model.Exercise?, useLb: Boolean): String {
+    val cardio = exercise?.pattern == com.warriorsbox.core.model.MovementPattern.CARDIO
+    if (cardio) return com.warriorsbox.core.engine.Units.formatDuration(item.repsMax)
+    val reps = if (item.repsMin == item.repsMax) "${item.repsMin}" else "${item.repsMin}–${item.repsMax}"
+    val unit = if (exercise?.timed == true) " s" else ""
+    val weight = if (item.weightKg > 0) " · " + com.warriorsbox.core.engine.Units.formatWeight(item.weightKg, useLb) else ""
+    return "${item.sets}×$reps$unit$weight"
 }

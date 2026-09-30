@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,7 +85,7 @@ fun RemindersScreen(userId: Long, onBack: () -> Unit) {
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     AppBackground(user?.backgroundPath ?: settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("Recordatorios · ${user?.name ?: ""}", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Recordatorios · ${user?.name ?: ""}", onBack) }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -103,6 +104,20 @@ fun RemindersScreen(userId: Long, onBack: () -> Unit) {
                     Row(Modifier.fillMaxWidth().clickable { missed = !missed }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("Avisar si pasan 2 días programados sin entrenar", Modifier.weight(1f))
                         Switch(checked = missed, onCheckedChange = { missed = it })
+                    }
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Modo sin filtro 🤬")
+                            Text(
+                                "Recordatorios groseros en jerga tica (ej. \"Vamos gordo carepicha…\"). Solo para ${user?.name ?: "este usuario"}.",
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                        Switch(
+                            checked = userId in settings.rudeUsers,
+                            onCheckedChange = { on -> scope.launch { c.settings.setRude(userId, on) } },
+                            modifier = Modifier.testTag("modo_sin_filtro"),
+                        )
                     }
                     TipBox("La notificación dice qué toca ese día (ej. \"Hoy toca: Pierna — Semana 2 Miércoles\") y al tocarla abre la sesión.")
                 }
@@ -123,6 +138,18 @@ fun RemindersScreen(userId: Long, onBack: () -> Unit) {
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Guardar") }
+                OutlinedButton(
+                    onClick = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Notifier.canNotify(context)) {
+                            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            val text = if (userId in settings.rudeUsers) com.warriorsbox.core.engine.Roasts.reminder("Pierna")
+                            else "Hoy toca entrenar. ¡Vamos, ${user?.name ?: ""}!"
+                            Notifier.show(context, (Notifier.ID_REMINDER_BASE + userId).toInt(), Notifier.CHANNEL_REMINDERS, "Warriors Box · ${user?.name ?: ""}", text)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Probar recordatorio ahora") }
                 savedMessage?.let { Text(it, color = WbGold) }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Notifier.canNotify(context)) {
                     TipBox("Las notificaciones están desactivadas para Warriors Box. Al guardar se pedirá el permiso.", color = WbRed)
@@ -140,7 +167,7 @@ fun TrainerPanelScreen(onBack: () -> Unit, onStudent: (Long) -> Unit, onPlan: (L
     var students by remember { mutableStateOf<List<StudentStatus>>(emptyList()) }
     LaunchedEffect(users) { students = c.stats.students() }
     AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("Panel de alumnos", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Panel de alumnos", onBack) }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -177,7 +204,7 @@ fun AboutScreen(onBack: () -> Unit, sources: List<CatalogSource>) {
     val c = container()
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("Acerca de", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Acerca de", onBack) }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),

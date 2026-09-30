@@ -81,6 +81,7 @@ fun UserDetailScreen(
     AppBackground(u?.backgroundPath ?: settings.backgroundPath, settings.veil) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = Color.White,
             topBar = {
                 WbTopBar(u?.name ?: "Usuario", onBack) {
                     IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, "Editar") }

@@ -81,7 +81,7 @@ fun LibraryScreen(
     var equipment by remember { mutableStateOf<Equipment?>(null) }
     var onlySpanish by remember { mutableStateOf(true) }
     var userEquipment by remember { mutableStateOf<Set<Equipment>?>(null) }
-    var onlyMine by remember { mutableStateOf(pickMode && userId > 0) }
+    var onlyMine by remember { mutableStateOf(false) }
     LaunchedEffect(userId) { if (userId > 0) userEquipment = c.users.trainingProfile(userId)?.equipment }
 
     val filtered = remember(all, query, muscle, equipment, onlySpanish, onlyMine, userEquipment) {
@@ -99,6 +99,7 @@ fun LibraryScreen(
     AppBackground(settings.backgroundPath, settings.veil) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = Color.White,
             topBar = { WbTopBar(if (pickMode) "Elegir ejercicio" else "Biblioteca", onBack) },
             floatingActionButton = {
                 if (!pickMode) ExtendedFloatingActionButton(onClick = onCreateCustom, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Ejercicio propio") })
@@ -124,7 +125,12 @@ fun LibraryScreen(
                     }
                 }
                 Text("${filtered.size} ejercicios", style = MaterialTheme.typography.labelMedium, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-                if (filtered.isEmpty()) EmptyState("Sin resultados. Prueba quitar filtros o desactivar \"Solo en español\".")
+                if (filtered.isEmpty()) {
+                    EmptyState(
+                        if (onlyMine) "Sin resultados con el equipo de tu perfil. Desactiva \"Con mi equipo\" o agrega ese equipo en tu perfil (paso 3)."
+                        else "Sin resultados. Prueba quitar filtros o desactivar \"Solo en español\".",
+                    )
+                }
                 LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(filtered, key = { it.id }) { e ->
                         WbCard(Modifier.clickable { if (pickMode) onPicked(e.id) else onOpen(e.id) }) {
@@ -158,7 +164,7 @@ fun ExerciseDetailScreen(exerciseId: String, onBack: () -> Unit, onProgress: (()
     val scope = rememberCoroutineScope()
     LaunchedEffect(exerciseId) { exercise = c.exercises.get(exerciseId) }
     AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar(exercise?.name ?: "Ejercicio", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar(exercise?.name ?: "Ejercicio", onBack) }) { padding ->
             val e = exercise ?: return@Scaffold
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
@@ -220,7 +226,7 @@ fun CustomExerciseScreen(onBack: () -> Unit) {
     var steps by remember { mutableStateOf("") }
     var timed by remember { mutableStateOf(false) }
     AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("Ejercicio propio", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Ejercicio propio", onBack) }) { padding ->
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),

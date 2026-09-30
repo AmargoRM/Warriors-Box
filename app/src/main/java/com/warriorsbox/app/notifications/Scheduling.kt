@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import com.warriorsbox.app.WarriorsApp
 import com.warriorsbox.core.engine.Reminders
+import com.warriorsbox.core.engine.Roasts
 import com.warriorsbox.core.engine.Stats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +111,8 @@ class ReminderReceiver : BroadcastReceiver() {
             val dayIndex = Reminders.planDayIndex(today)
             var text = "Hoy toca entrenar. ¡Vamos, ${user.name}!"
             var dayId: Long? = null
+            var focus: String? = null
+            val rude = userId in c.settings.current().rudeUsers
             if (plan != null && dayIndex != null) {
                 val days = c.plans.daysNow(plan.id)
                 val sessions = c.sessions.sessionsNow(userId).filter { s -> days.any { it.id == s.dayId } }
@@ -117,8 +120,10 @@ class ReminderReceiver : BroadcastReceiver() {
                 days.firstOrNull { it.week == week && it.dayIndex == dayIndex }?.let {
                     text = "Hoy toca: ${it.focus} — Semana ${it.week} ${Reminders.PLAN_DAY_NAMES[it.dayIndex]}"
                     dayId = it.id
+                    focus = it.focus
                 }
             }
+            if (rude) text = Roasts.reminder(focus)
             val openDay = dayId
             Notifier.show(
                 context, (Notifier.ID_REMINDER_BASE + userId).toInt(), Notifier.CHANNEL_REMINDERS,
@@ -139,7 +144,8 @@ class ReminderReceiver : BroadcastReceiver() {
                     Notifier.show(
                         context, (Notifier.ID_MISSED_BASE + userId).toInt(), Notifier.CHANNEL_REMINDERS,
                         "${user.name}, ¿todo bien?",
-                        "Llevas ${Stats.daysSince(last, today)} días sin entrenar. Las pesas empiezan a sospechar que te fuiste con otras.",
+                        if (rude) Roasts.missed(Stats.daysSince(last, today) ?: 2)
+                        else "Llevas ${Stats.daysSince(last, today)} días sin entrenar. Las pesas empiezan a sospechar que te fuiste con otras.",
                     )
                 }
             }

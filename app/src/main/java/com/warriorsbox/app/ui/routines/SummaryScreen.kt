@@ -83,7 +83,7 @@ fun SummaryScreen(sessionId: Long, onBack: () -> Unit) {
     }
 
     AppBackground(userBackground ?: settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("Resumen", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Resumen", onBack) }) { padding ->
             val s = summary ?: return@Scaffold
             Column(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),

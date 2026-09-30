@@ -105,6 +105,7 @@ fun PlanEditorScreen(
     AppBackground(settings.backgroundPath, settings.veil) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentColor = Color.White,
             topBar = { WbTopBar(title, onBack) },
             floatingActionButton = {
                 ExtendedFloatingActionButton(onClick = { onPickExercise("add") }, icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Agregar ejercicio") })
@@ -114,6 +115,27 @@ fun PlanEditorScreen(
                 contentPadding = PaddingValues(16.dp, padding.calculateTopPadding(), 16.dp, 96.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                item {
+                    var focusText by remember(day?.id, day?.focus) { mutableStateOf(day?.focus.orEmpty()) }
+                    WbCard {
+                        Text("Nombre del día", style = MaterialTheme.typography.labelLarge)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                focusText, { focusText = it }, singleLine = true,
+                                placeholder = { Text("Ej.: Pecho y tríceps") },
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                enabled = focusText.isNotBlank() && focusText != day?.focus,
+                                onClick = { scope.launch { c.plans.renameDay(dayId, focusText) } },
+                            ) { Text("Guardar") }
+                        }
+                        Text(
+                            "Toca \"Agregar ejercicio\" y luego ✎ para ajustar series, repeticiones y peso.",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { copyDialog = true }, modifier = Modifier.weight(1f)) { Text("Copiar a otras semanas") }

@@ -98,6 +98,9 @@ interface PlanDao {
     @Insert
     suspend fun insertDay(day: PlanDayEntity): Long
 
+    @Update
+    suspend fun updateDay(day: PlanDayEntity)
+
     @Insert
     suspend fun insertItem(item: PlanItemEntity): Long
 

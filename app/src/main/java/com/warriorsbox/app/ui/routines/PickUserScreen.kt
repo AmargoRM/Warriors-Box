@@ -36,7 +36,7 @@ fun PickUserScreen(onBack: () -> Unit, onPick: (Long) -> Unit, onCreateUser: () 
     val users by c.users.users.collectAsStateWithLifecycle(emptyList())
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, topBar = { WbTopBar("¿Quién entrena hoy?", onBack) }) { padding ->
+        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("¿Quién entrena hoy?", onBack) }) { padding ->
             if (users.isEmpty()) {
                 Column(Modifier.padding(padding).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     EmptyState("Primero crea un usuario para armar su rutina.")
