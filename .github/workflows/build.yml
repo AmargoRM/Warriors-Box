@@ -1,0 +1,60 @@
+# Compila la app, corre todas las pruebas y el análisis (lint) en cada push.
+# Deja el APK de prueba (debug) y los informes como archivos descargables del run.
+name: Compilar y probar
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Pruebas de la lógica central (motor de rutinas, progresión, alternativas…)
+        run: ./gradlew :core:test --stacktrace
+
+      - name: Pruebas de la app (base de datos, copias, flujo de pantallas)
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Análisis de código (Android lint)
+        run: ./gradlew :app:lintDebug --stacktrace
+
+      - name: Compilar APK de prueba
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Subir APK de prueba
+        uses: actions/upload-artifact@v4
+        with:
+          name: warriors-box-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Subir informes de pruebas y lint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes
+          path: |
+            core/build/reports/tests/
+            core/build/test-results/
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-debug.html
+          retention-days: 14
