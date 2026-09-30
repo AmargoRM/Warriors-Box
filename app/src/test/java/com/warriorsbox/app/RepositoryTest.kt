@@ -245,4 +245,16 @@ class RepositoryTest {
         assertTrue(c.exercises.allNow().filter { it.curated }.all { it.image != null })
     }
 
+
+    @Test
+    fun bodyPartFiltersFindMachinesAndChest() = runBlocking {
+        val curated = c.exercises.allNow().filter { it.curated }
+        val chest = curated.filter { com.warriorsbox.app.ui.library.BodyPart.CHEST.matches(it) }
+        assertTrue(chest.size >= 20)
+        val chestMachines = chest.filter { com.warriorsbox.core.model.Equipment.MACHINE in it.equipment }
+        assertTrue(chestMachines.size >= 5)
+        assertTrue(curated.count { com.warriorsbox.core.model.Equipment.MACHINE in it.equipment } >= 40)
+        assertTrue(curated.any { com.warriorsbox.app.ui.library.BodyPart.CARDIO.matches(it) })
+    }
+
 }

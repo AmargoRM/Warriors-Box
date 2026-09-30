@@ -17,11 +17,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,6 +65,25 @@ import com.warriorsbox.core.model.Muscle
 import kotlinx.coroutines.launch
 import java.text.Normalizer
 
+/** Partes del cuerpo para filtrar la biblioteca ("ver todos los de pecho"). */
+enum class BodyPart(val label: String, val muscles: Set<Muscle>) {
+    CHEST("Pecho", setOf(Muscle.CHEST)),
+    BACK("Espalda", setOf(Muscle.LATS, Muscle.MIDDLE_BACK, Muscle.LOWER_BACK, Muscle.TRAPS)),
+    SHOULDERS("Hombros", setOf(Muscle.SHOULDERS)),
+    BICEPS("Bíceps", setOf(Muscle.BICEPS)),
+    TRICEPS("Tríceps", setOf(Muscle.TRICEPS)),
+    FOREARMS("Antebrazos", setOf(Muscle.FOREARMS)),
+    LEGS("Piernas", setOf(Muscle.QUADS, Muscle.HAMSTRINGS, Muscle.ADDUCTORS, Muscle.ABDUCTORS)),
+    GLUTES("Glúteos", setOf(Muscle.GLUTES)),
+    CALVES("Pantorrillas", setOf(Muscle.CALVES)),
+    ABS("Abdomen", setOf(Muscle.ABS)),
+    CARDIO("Cardio", setOf(Muscle.CARDIO)),
+    ;
+
+    fun matches(e: Exercise): Boolean =
+        e.primaryMuscles.any { it in muscles } || (this == CARDIO && e.pattern == MovementPattern.CARDIO)
+}
+
 private fun normalize(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 
 @Composable
@@ -77,18 +99,18 @@ fun LibraryScreen(
     val all by c.exercises.all.collectAsStateWithLifecycle(emptyList())
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     var query by remember { mutableStateOf("") }
-    var muscle by remember { mutableStateOf<Muscle?>(null) }
+    var bodyPart by remember { mutableStateOf<BodyPart?>(null) }
     var equipment by remember { mutableStateOf<Equipment?>(null) }
     var onlySpanish by remember { mutableStateOf(true) }
     var userEquipment by remember { mutableStateOf<Set<Equipment>?>(null) }
     var onlyMine by remember { mutableStateOf(false) }
     LaunchedEffect(userId) { if (userId > 0) userEquipment = c.users.trainingProfile(userId)?.equipment }
 
-    val filtered = remember(all, query, muscle, equipment, onlySpanish, onlyMine, userEquipment) {
+    val filtered = remember(all, query, bodyPart, equipment, onlySpanish, onlyMine, userEquipment) {
         val q = normalize(query.trim())
         all.asSequence()
             .filter { !onlySpanish || it.curated || it.custom }
-            .filter { muscle == null || muscle in it.primaryMuscles }
+            .filter { e -> bodyPart?.matches(e) ?: true }
             .filter { equipment == null || equipment in it.equipment || (equipment == Equipment.NONE && it.isBodyweight) }
             .filter { !onlyMine || userEquipment == null || it.isAvailableWith(userEquipment!!) }
             .filter { q.isEmpty() || normalize(it.name).contains(q) || normalize(it.nameEn.orEmpty()).contains(q) }
@@ -107,24 +129,73 @@ fun LibraryScreen(
         ) { padding ->
             Column(Modifier.padding(padding)) {
                 OutlinedTextField(
-                    value = query, onValueChange = { query = it },
+                    value = query,
+                    onValueChange = {
+                        query = it
+                        // Buscar por nombre quita los filtros de parte del cuerpo y elemento.
+                        if (it.isNotBlank()) {
+                            bodyPart = null
+                            equipment = null
+                        }
+                    },
                     leadingIcon = { Icon(Icons.Filled.Search, null) },
-                    label = { Text("Buscar (español o inglés)") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    trailingIcon = {
+                        if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, "Borrar búsqueda") }
+                    },
+                    label = { Text("Buscar por nombre (español o inglés)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("buscar_ejercicio"),
                 )
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Parte del cuerpo", style = MaterialTheme.typography.labelLarge, color = Color.White, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item { FilterChip(selected = bodyPart == null, onClick = { bodyPart = null }, label = { Text("Todas") }) }
+                    items(BodyPart.entries) { b ->
+                        FilterChip(
+                            selected = bodyPart == b,
+                            onClick = {
+                                bodyPart = if (bodyPart == b) null else b
+                                query = ""
+                            },
+                            label = { Text(b.label) },
+                            modifier = Modifier.testTag("parte_${b.name}"),
+                        )
+                    }
+                }
+                Text("Elemento", style = MaterialTheme.typography.labelLarge, color = Color.White, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item { FilterChip(selected = equipment == null, onClick = { equipment = null }, label = { Text("Todos") }) }
+                    items(Equipment.entries) { e ->
+                        FilterChip(
+                            selected = equipment == e,
+                            onClick = {
+                                equipment = if (equipment == e) null else e
+                                query = ""
+                            },
+                            label = { Text(e.label) },
+                        )
+                    }
+                }
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     item { FilterChip(selected = onlySpanish, onClick = { onlySpanish = !onlySpanish }, label = { Text("Solo en español") }) }
                     if (userEquipment != null) item { FilterChip(selected = onlyMine, onClick = { onlyMine = !onlyMine }, label = { Text("Con mi equipo") }) }
-                    items(Muscle.entries.filter { it != Muscle.NECK }) { m ->
-                        FilterChip(selected = muscle == m, onClick = { muscle = if (muscle == m) null else m }, label = { Text(m.label) })
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val title = listOfNotNull(
+                        bodyPart?.label,
+                        equipment?.label,
+                        query.takeIf { it.isNotBlank() }?.let { "\"$it\"" },
+                    ).joinToString(" · ").ifBlank { "Todos" }
+                    Text(
+                        "$title · ${filtered.size} ejercicios",
+                        style = MaterialTheme.typography.titleSmall, color = Color.White, modifier = Modifier.weight(1f),
+                    )
+                    if (bodyPart != null || equipment != null || query.isNotBlank()) {
+                        TextButton(onClick = {
+                            bodyPart = null
+                            equipment = null
+                            query = ""
+                        }) { Text("Ver todos") }
                     }
                 }
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(Equipment.entries) { e ->
-                        FilterChip(selected = equipment == e, onClick = { equipment = if (equipment == e) null else e }, label = { Text(e.label) })
-                    }
-                }
-                Text("${filtered.size} ejercicios", style = MaterialTheme.typography.labelMedium, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 if (filtered.isEmpty()) {
                     EmptyState(
                         if (onlyMine) "Sin resultados con el equipo de tu perfil. Desactiva \"Con mi equipo\" o agrega ese equipo en tu perfil (paso 3)."
