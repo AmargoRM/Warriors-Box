@@ -7,7 +7,7 @@ Imágenes de referencia: `docs/referencias/logo-warriors-box.jpg` y `docs/refere
 
 ## ROL Y OBJETIVO
 
-Actuá como desarrollador Android senior. Construí desde cero, en este repositorio, una app Android nativa llamada **Warriors Box** que se instala como **APK directo (sideload), sin Play Store**, para llevar el registro diario de rutinas de gimnasio de varios usuarios en un mismo celular.
+Actuá como desarrollador Android senior. Construí desde cero, en este repositorio, una app Android nativa llamada **Warriors Box** que se instala como **APK directo (sideload), sin Play Store**, para llevar el registro diario de rutinas de gimnasio de varios usuarios en un mismo celular. **Uso personal: no se publicará en Play Store.**
 
 El dueño del proyecto **no es programador**. Por eso:
 - Todo debe compilar y generar el APK **automáticamente con GitHub Actions**, sin que él instale nada en su computadora.
@@ -81,7 +81,7 @@ El dueño del proyecto **no es programador**. Por eso:
    - Al terminar la semana 5, ofrecer "Generar nuevo ciclo de 5 semanas" partiendo de los últimos pesos.
 
 ### 4. Biblioteca de ejercicios
-- Precargada (seed en Room) con al menos 60 ejercicios clasificados por grupo muscular, equipo, nivel y **zonas de lesión que lo contraindican**. Debe incluir como mínimo:
+- Precargada (seed en Room) con **todos los ejercicios de las fuentes públicas** (wger + free-exercise-db, varios cientos), priorizando y traduciendo al español los ~150 más usados y efectivos. Clasificados por grupo muscular, patrón de movimiento, equipo, nivel y **zonas de lesión que lo contraindican**. Debe incluir como mínimo:
   - De la imagen de referencia: Sentadilla goblet, Remo a una mano, Press de pecho en el suelo, Peso muerto rumano, Press de hombro a una mano, Curl de bíceps, Puente de glúteos, Plancha elevada.
   - Gimnasio: sentadilla con barra, prensa de piernas, zancadas, extensión y curl de cuádriceps/femoral, hip thrust, press banca plano/inclinado, aperturas, fondos, jalón al pecho, dominadas (asistidas), remo con barra, remo en polea, face pull, press militar, elevaciones laterales, curl martillo, extensión de tríceps en polea, press francés, pantorrillas, crunch, plancha, pallof press, farmer walk, etc.
 - Cada ejercicio: nombre en español, músculos, equipo, instrucciones en 3 pasos cortos, errores comunes, y ilustración (vector propio o imagen de la API; nunca imágenes con copyright sin licencia).
@@ -96,7 +96,8 @@ El dueño del proyecto **no es programador**. Por eso:
 - Foto de fondo (elegir / quitar / intensidad del velo).
 - Unidades (kg/lb, cm/ft).
 - **Copia de seguridad**: exportar todo a un archivo `.json` (o `.zip` con fotos) usando el selector de archivos del sistema, e importar desde ese archivo. Recordatorio mensual de hacer copia.
-- Clave de API (opcional) para recomendaciones con IA — guardada cifrada, nunca en el código.
+- Recordatorios de entrenamiento (ver sección Recordatorios).
+- Modo entrenador activado/desactivado (ver sección Modo entrenador).
 - Acerca de / versión.
 
 ## CONEXIÓN A INTERNET Y RECOMENDACIONES REALISTAS
@@ -112,14 +113,50 @@ Implementar en dos capas:
 - Peso inicial sugerido conservador según nivel y peso corporal, con aviso de "ajustá a una carga que te deje 2–3 repeticiones en reserva".
 - Cada recomendación muestra **por qué** se eligió ("Elegido porque tenés 4 días y objetivo hipertrofia").
 
-**Capa 2 — Con internet (opcional, mejora la capa 1):**
-- Sincronizar la biblioteca de ejercicios con la **API pública de wger** (`https://wger.de/api/v2/`, gratuita y de código abierto) para traer más ejercicios e imágenes con licencia libre. Cachear en Room.
-- **Recomendaciones con IA** (solo si el usuario configuró una clave de API): enviar el perfil **anonimizado** (sin nombre, sin foto, sin contacto) y el historial resumido; pedir la respuesta en JSON con esquema fijo; **validar** la respuesta contra la biblioteca local y las reglas de seguridad antes de mostrarla (rechazar ejercicios contraindicados o volúmenes fuera de rango). El usuario siempre ve la propuesta y decide si aplicarla.
+**Capa 2 — Base de conocimiento desde internet (fuentes públicas, SIN inteligencia artificial):**
+- **No usar IA ni claves de API de pago.** Todo el conocimiento viene de fuentes públicas con licencia abierta:
+  - **wger** (`https://wger.de/api/v2/`, CC-BY-SA): ejercicios, músculos, equipo, imágenes y variaciones.
+  - **free-exercise-db** (`https://github.com/yuhonas/free-exercise-db`, dominio público): 800+ ejercicios con instrucciones e imágenes.
+  - **Compendium of Physical Activities** (valores MET públicos) para el cálculo de calorías.
+- Estas fuentes se descargan **en tiempo de compilación** para armar la biblioteca inicial (así la app trae todo desde el primer uso, sin internet), y la app **sincroniza novedades** una vez por semana con WorkManager cuando hay Wi-Fi. Cachear en Room.
+- Traducir al español los nombres e instrucciones de los ejercicios más comunes (tabla de traducción propia en el código); si falta traducción, mostrar el original.
+- Mostrar el crédito/licencia de cada fuente en "Acerca de". **No** copiar contenido de sitios con copyright ni hacer scraping de páginas web.
 - Manejar sin conexión, timeout y errores con mensajes claros; nunca bloquear la app.
+
+## ALTERNATIVAS: "NO PUEDO HACER ESTE EJERCICIO"
+
+- En cada ejercicio del plan y durante la sesión, botón **"No puedo hacerlo"** que pregunta el motivo: *no tengo el equipo / máquina ocupada / me duele o molesta / no sé hacerlo / muy difícil*.
+- Según el motivo, ofrecer **3–5 alternativas que trabajen el mismo músculo principal y patrón de movimiento** (empuje horizontal, empuje vertical, tracción horizontal, tracción vertical, sentadilla, bisagra de cadera, zancada, core, aislamiento), filtradas por el equipo disponible y las lesiones del usuario, ordenadas de la más parecida a la menos. Cada una con su dificultad y el motivo de la sugerencia.
+  - "Me duele" → solo variantes de menor carga articular (ej. press banca → flexiones inclinadas / press con mancuernas agarre neutro) y registrar la molestia en el perfil.
+  - "Muy difícil" → regresión (ej. dominadas → dominadas asistidas / jalón / remo invertido).
+- El usuario elige si el cambio es **solo por hoy** o **para todo el plan**. El historial de progreso se conecta al ejercicio realmente hecho.
+- Cada ejercicio de la biblioteca guarda su patrón de movimiento, músculos primarios/secundarios, equipo y nivel, para que las alternativas se calculen automáticamente.
+
+## RECORDATORIOS
+
+- Por usuario: elegir días y hora de entrenamiento; notificación ("Hoy toca: Pierna — Semana 2 Día 3") con `AlarmManager`/WorkManager, que sobreviva al reinicio del teléfono (`RECEIVE_BOOT_COMPLETED`).
+- Aviso opcional si pasaron 2 días sin entrenar en un día programado, y recordatorio mensual de copia de seguridad.
+- Pedir permiso de notificaciones (`POST_NOTIFICATIONS`) al activar el primer recordatorio, explicando para qué. Si se necesita alarma exacta, pedir `SCHEDULE_EXACT_ALARM` con explicación o usar alarma inexacta como alternativa.
+- Tocar la notificación abre directamente la sesión de ese usuario y día.
+
+## MODO ENTRENADOR
+
+- Se activa en Ajustes y se protege con un **PIN de 4 dígitos**.
+- El entrenador ve un **panel con todos los alumnos**: última sesión, sesiones de la semana, cumplimiento del plan (%), récords recientes y alertas (alumno que no entrena hace 5+ días, molestias registradas).
+- Puede **crear y editar planes** para cada alumno, copiar un plan de un alumno a otro, y dejar notas/indicaciones por ejercicio que el alumno ve en su sesión.
+- Los alumnos pueden registrar sus sesiones sin PIN, pero **no** pueden editar su plan ni ver los datos de otros si el modo entrenador está activo.
+- Exportar/importar el plan de un alumno como archivo para pasarlo a otro celular (por WhatsApp, etc.).
+
+## COMPARTIR EN INSTAGRAM (imagen de resumen)
+
+- Al terminar una sesión, botón **"Compartir"** que genera una **imagen PNG** con el estilo Warriors Box (logo, fondo negro/foto del usuario con velo, acento dorado), en dos formatos: **historia 1080×1920** y **post 1080×1350**.
+- Contenido: nombre (opcional), fecha, rutina del día, duración, ejercicios hechos con series × reps × peso, volumen total, récords personales del día, racha de días y **calorías quemadas estimadas**.
+- **Calorías**: `kcal = MET × peso_kg × horas` usando MET del Compendium (pesas moderado ≈ 3.5, vigoroso ≈ 6.0, bici suave ≈ 4.0 para el calentamiento), según duración real y RPE. Mostrar "≈" y aclarar que es una estimación.
+- Compartir con el menú del sistema (`ACTION_SEND` + `FileProvider`) y opción de guardar en la galería (MediaStore, sin permisos). También resumen semanal compartible.
 
 ## CALIDAD Y PRUEBAS (obligatorio correrlas y reportar resultados)
 
-1. **Pruebas unitarias** (JUnit + Truth/MockK): motor de recomendaciones (todas las combinaciones de días/nivel/objetivo; exclusión por lesión), progresión semanal y deload, cálculo de edad/IMC/conversión de unidades, validación de respuestas de la IA, exportar→importar produce los mismos datos.
+1. **Pruebas unitarias** (JUnit + Truth/MockK): motor de recomendaciones (todas las combinaciones de días/nivel/objetivo; exclusión por lesión), alternativas por motivo, progresión semanal y deload, cálculo de edad/IMC/conversión de unidades, cálculo de calorías, generación de la imagen para compartir, PIN del modo entrenador, programación de recordatorios, exportar→importar produce los mismos datos.
 2. **Pruebas de base de datos** (Room in-memory): CRUD de usuarios, borrado en cascada del historial, migraciones.
 3. **Pruebas de UI** (Compose UI Test / Robolectric): flujo completo crear usuario → elegir usuario → abrir Semana 1 Día 1 → registrar series → ver completado.
 4. **Lint** de Android sin errores y **detekt/ktlint** para estilo.
@@ -144,12 +181,12 @@ Una vez instalado el primer APK, las siguientes versiones deben llegar desde la 
 5. **Datos**: la actualización se instala **encima** de la app y conserva todos los datos. Antes de instalar, hacer automáticamente una copia de seguridad local (export JSON).
 6. **Migraciones de Room**: cada cambio de esquema de base de datos debe tener su migración escrita y probada; **prohibido** `fallbackToDestructiveMigration` (borraría los datos del usuario al actualizar).
 7. **Publicar una versión nueva** debe ser un solo paso para el dueño: crear un tag `vX.Y.Z` (o ejecutar el workflow manualmente con un botón en GitHub Actions indicando la versión y las notas). El workflow sube `versionCode`, compila, firma con el **mismo keystore**, calcula el SHA-256, genera `update.json` y publica el Release.
-8. Si el repositorio es **privado**, la API de GitHub no deja descargar sin token: en ese caso publicar los releases en un repositorio público separado solo para APKs (ej. `warriors-box-releases`) y documentarlo.
+8. El repositorio es **público** (`AmargoRM/Warriors-Box`), así que la app consulta sus releases directamente sin token.
 9. Pruebas: unitarias para la comparación de versiones y el parseo de `update.json`; prueba manual documentada instalando v1.0.0, publicando v1.0.1 y verificando alerta, descarga, instalación y que los datos siguen ahí.
 
 ## REGLAS DE TRABAJO
 
-- Avanzá por fases y hacé commit al final de cada una: (1) esqueleto + tema + CI que genera APK vacío; (2) Room + Usuarios; (3) Biblioteca + seed; (4) Rutinas + registro; (5) motor de recomendaciones; (6) internet (wger + IA opcional); (7) historial/gráficos; (8) backup; (9) actualizaciones dentro de la app; (10) pruebas finales + informe.
+- Avanzá por fases y hacé commit al final de cada una: (1) esqueleto + tema + CI que genera APK vacío; (2) Room + Usuarios; (3) Biblioteca + seed; (4) Rutinas + registro; (5) motor de recomendaciones; (6) alternativas "No puedo hacerlo"; (7) sincronización con fuentes públicas; (8) historial/gráficos + imagen para Instagram; (9) recordatorios; (10) modo entrenador; (11) backup; (12) actualizaciones dentro de la app; (13) pruebas finales + informe.
 - No dejes TODOs ni pantallas "próximamente". Si algo no se puede hacer, explicalo en el README.
 - Textos de la app en español neutro, centralizados en `strings.xml`.
 - Incluir un aviso visible (una vez, al crear el primer usuario): "Esta app no reemplaza la opinión de un médico o entrenador certificado."
