@@ -1,0 +1,131 @@
+# Publica una versión nueva: compila el APK firmado, calcula su SHA-256, genera update.json
+# y crea el Release de GitHub. La app instalada lo detecta y avisa "Nueva versión disponible".
+#
+# Cómo usarlo (un solo paso): pestaña Actions → "Publicar versión" → Run workflow →
+# escribir la versión (ej. 1.0.1) y las notas → Run.
+name: Publicar versión
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión (ej. 1.0.1). Debe ser mayor que la anterior."
+        required: true
+      notas:
+        description: "Qué hay de nuevo (se muestra en la app)"
+        required: false
+        default: "Mejoras y correcciones."
+      obligatoria:
+        description: "¿Actualización obligatoria? (no se puede omitir)"
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determinar versión
+        id: v
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_NOTAS: ${{ github.event.inputs.notas }}
+          INPUT_OBLIGATORIA: ${{ github.event.inputs.obligatoria }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then VERSION="$INPUT_VERSION"; else VERSION="${GITHUB_REF_NAME}"; fi
+          VERSION="$(echo "${VERSION#v}" | tr -d '[:space:]')"
+          # Completar formatos cortos: "1" → 1.0.0, "1.2" → 1.2.0
+          if echo "$VERSION" | grep -Eq '^[0-9]+$'; then VERSION="$VERSION.0.0"; fi
+          if echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]{1,2}$'; then VERSION="$VERSION.0"; fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]{1,2}\.[0-9]{1,2}$'; then
+            echo "::error::La versión debe tener el formato X.Y.Z (por ejemplo 1.0.1). Recibido: $VERSION"; exit 1
+          fi
+          CODE=$(echo "$VERSION" | awk -F. '{ print $1*10000 + $2*100 + $3 }')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          NOTAS="${INPUT_NOTAS:-Mejoras y correcciones.}"
+          { echo "notas<<FIN_NOTAS"; echo "$NOTAS"; echo "FIN_NOTAS"; } >> "$GITHUB_OUTPUT"
+          echo "obligatoria=${INPUT_OBLIGATORIA:-false}" >> "$GITHUB_OUTPUT"
+
+      - name: Verificar que la llave de firma esté configurada
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          missing=""
+          [ -z "$KEYSTORE_BASE64" ] && missing="$missing KEYSTORE_BASE64"
+          [ -z "$KEYSTORE_PASSWORD" ] && missing="$missing KEYSTORE_PASSWORD"
+          [ -z "$KEY_ALIAS" ] && missing="$missing KEY_ALIAS"
+          [ -z "$KEY_PASSWORD" ] && missing="$missing KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secretos de GitHub:$missing. Ver docs/LLAVE_DE_FIRMA.md"; exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Pruebas antes de publicar
+        run: ./gradlew :core:test :app:testDebugUnitTest --stacktrace
+
+      - name: Compilar APK firmado
+        env:
+          SIGNING_STORE_FILE: ${{ runner.temp }}/release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease -PappVersion=${{ steps.v.outputs.version }} --stacktrace
+
+      - name: Preparar archivos del Release
+        id: files
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          CODE: ${{ steps.v.outputs.code }}
+          NOTAS: ${{ steps.v.outputs.notas }}
+          OBLIGATORIA: ${{ steps.v.outputs.obligatoria }}
+        run: |
+          mkdir -p dist
+          APK="dist/warriors-box-v${VERSION}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$APK"
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/warriors-box-v${VERSION}.apk"
+          export SHA URL
+          python3 - <<'PY'
+          import json, os
+          info = {
+              "versionCode": int(os.environ["CODE"]),
+              "versionName": os.environ["VERSION"],
+              "apkUrl": os.environ["URL"],
+              "sha256": os.environ["SHA"],
+              "notas": os.environ.get("NOTAS", ""),
+              "obligatoria": os.environ.get("OBLIGATORIA", "false") == "true",
+          }
+          json.dump(info, open("dist/update.json", "w"), ensure_ascii=False, indent=2)
+          PY
+          cat dist/update.json
+        shell: bash
+
+      - name: Crear Release en GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+          NOTAS: ${{ steps.v.outputs.notas }}
+        run: |
+          if gh release view "v${VERSION}" > /dev/null 2>&1; then
+            echo "::error::Ya existe el Release v${VERSION}. Usa un número de versión mayor."; exit 1
+          fi
+          gh release create "v${VERSION}" dist/warriors-box-v${VERSION}.apk dist/update.json \
+            --target "${GITHUB_SHA}" --title "Warriors Box v${VERSION}" --notes "$NOTAS" --latest
