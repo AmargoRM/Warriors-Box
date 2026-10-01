@@ -41,7 +41,13 @@ class NtfyLiveTest {
         } catch (e: IOException) {
             assumeTrue("ntfy.sh no disponible: ${e.message}", false)
         }
-        val messages = relay.poll(channel)
+        // ntfy.sh guarda los mensajes en su caché por tandas: puede tardar unos segundos en devolverlos.
+        var messages = relay.poll(channel)
+        repeat(10) {
+            if (messages.size >= 2) return@repeat
+            kotlinx.coroutines.delay(2_000)
+            messages = relay.poll(channel)
+        }
         assertEquals("respuesta de ntfy: $messages", 2, messages.size)
         val opened = messages.map { m ->
             val text = if (m.attachmentUrl != null) relay.download(m.attachmentUrl!!) else m.text!!
