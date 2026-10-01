@@ -98,6 +98,15 @@ kotlin {
     }
 }
 
+// En CI se ve el motivo completo de cada prueba que falla.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = false
+    }
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }

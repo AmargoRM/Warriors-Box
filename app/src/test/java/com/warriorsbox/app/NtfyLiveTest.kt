@@ -42,11 +42,11 @@ class NtfyLiveTest {
             assumeTrue("ntfy.sh no disponible: ${e.message}", false)
         }
         val messages = relay.poll(channel)
-        assertEquals(2, messages.size)
+        assertEquals("respuesta de ntfy: $messages", 2, messages.size)
         val opened = messages.map { m ->
             val text = if (m.attachmentUrl != null) relay.download(m.attachmentUrl!!) else m.text!!
             CoachProtocol.open(key, text)
         }
-        assertEquals(listOf(small, big), opened)
+        assertEquals("abiertos: ${opened.map { it?.type }}", listOf(small, big), opened)
     }
 }

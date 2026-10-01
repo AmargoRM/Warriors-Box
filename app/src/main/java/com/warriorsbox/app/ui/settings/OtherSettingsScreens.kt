@@ -226,6 +226,8 @@ fun AboutScreen(onBack: () -> Unit, sources: List<CatalogSource>) {
                         "Compendium of Physical Activities (valores MET)" to "Uso académico público",
                         "Fuente Black Ops One" to "SIL Open Font License 1.1",
                         "Iconos Material" to "Apache 2.0",
+                        "ntfy.sh (buzón cifrado del modo coach)" to "Servicio público gratuito",
+                        "ZXing y zxing-android-embedded (códigos QR)" to "Apache 2.0",
                     )
                     all.distinctBy { it.first }.forEach { (name, license) -> LabeledRow(name, license) }
                 }

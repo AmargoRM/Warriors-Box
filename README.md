@@ -38,6 +38,16 @@ Se instala como **APK** (sin Play Store) y se **actualiza sola** desde los Relea
   - Tiene un panel de alumnos con cumplimiento, récords y alertas.
   - El entrenador deja notas en cada ejercicio.
   - Los planes se pueden exportar e importar en un archivo.
+- **Coach a distancia** (dos celulares con la app):
+  1. El alumno abre su perfil → "Vincular con mi coach" y muestra un **QR**. Si no están juntos, puede compartir el código por WhatsApp.
+  2. El coach va a Usuarios → "Soy coach: vincular alumno" y lo escanea. El alumno aparece en su celular con su perfil completo.
+  3. El coach arma el plan (ejercicios, series, repeticiones, peso y notas) y toca **"Enviar plan"**.
+  4. Al alumno le llega **dentro de la app**. Al abrirla ve "Plan nuevo de tu coach" con las opciones Aceptar, Rechazar o Más tarde.
+  5. Si el alumno cambia el plan, primero ve una advertencia. Si confirma, al coach le llega un aviso con el detalle de los cambios.
+  - Los mensajes viajan **cifrados** por el buzón público y gratuito [ntfy.sh](https://ntfy.sh), sin cuentas. La llave solo está en el QR.
+  - Si el alumno no abre la app a tiempo, el celular del coach reenvía el plan solo cada 2 horas y media, hasta 14 días.
+- **Ejercicios propios con fotos**: si un ejercicio no existe, se crea a mano con nombre, músculos, equipo, instrucciones, consejo y hasta 3 fotos (galería o cámara). Si el coach lo usa en un plan, viaja con sus fotos al celular del alumno.
+- **Eliminar perfil**: con el basurero de cada usuario en la lista, o desde su perfil. Siempre pide confirmación.
 - **Biblioteca de 889 ejercicios**:
   - 150 están curados en español, con técnica en 3 pasos.
   - Tiene buscador y filtros, y puedes crear ejercicios propios.
@@ -124,11 +134,16 @@ docs/     Guías e informe de pruebas
 - En el editor del plan, los ejercicios se reordenan con flechas ↑↓ en lugar de arrastrarlos. Es más preciso con el dedo y más fácil de mantener.
 - El temporizador de descanso avisa con una alarma "no exacta" cuando la app está en segundo plano. Así no hace falta pedir el permiso especial de alarmas exactas, pero el aviso puede llegar algunos segundos tarde.
 - Los ejercicios que vienen de internet se muestran con su nombre original (en inglés) cuando no tienen traducción.
+- **Coach a distancia sin servidor propio**: usa ntfy.sh como buzón.
+  - ntfy.sh guarda los mensajes 12 horas y los adjuntos 3 horas. Por eso el coach reenvía el plan hasta que el alumno confirma que le llegó.
+  - Si ntfy.sh dejara de funcionar, el envío dentro de la app fallaría, pero no se pierde nada: queda el menú ⋮ → Exportar plan (archivo).
+  - El estado del modo coach se guarda en un archivo propio, no en la base de datos, así que esta función no necesitó migrar la base.
 - Las calorías son una **estimación** con valores MET (Compendium of Physical Activities), no una medición.
 - **Esta app no reemplaza la opinión de un médico o entrenador certificado.**
 
 ### Créditos y licencias
 
+- Buzón del modo coach: [ntfy.sh](https://ntfy.sh) (servicio público, Apache 2.0 / GPLv2). QR: [ZXing](https://github.com/zxing/zxing) y zxing-android-embedded (Apache 2.0).
 - Ejercicios: [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense, dominio público) y [wger](https://wger.de) (CC-BY-SA 4.0).
 - Fuente: Black Ops One (SIL Open Font License 1.1).
 - Valores MET: Compendium of Physical Activities.
