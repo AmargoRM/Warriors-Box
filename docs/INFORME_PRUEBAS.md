@@ -1,14 +1,14 @@
 # Informe de pruebas — Warriors Box
 
-Fecha: 30 de septiembre de 2026.
+Fecha: 1 de octubre de 2026 (versión 1.2.0: modo coach a distancia).
 Dónde se corrieron: GitHub Actions (servidores de GitHub), en el flujo **"Compilar y probar"**, que corre automáticamente en cada cambio.
 
 ## Resumen
 
 | Grupo | Pruebas | Resultado |
 |---|---|---|
-| Lógica central (`:core`) | 27 | ✅ todas pasan |
-| App Android (`:app`, Robolectric) | 13 | ✅ todas pasan |
+| Lógica central (`:core`) | 33 | ✅ todas pasan |
+| App Android (`:app`, Robolectric) | 23 | ✅ todas pasan |
 | Análisis de código (Android lint) | — | ✅ sin errores |
 | Compilación del APK | — | ✅ |
 | Emuladores (Android 8.0, 11, 14 y 15) | 4 | ✅ la app abre, entra a Usuarios y Rutinas y no se cierra |
@@ -72,6 +72,29 @@ Dónde se corrieron: GitHub Actions (servidores de GitHub), en el flujo **"Compi
   4. Semana 1, lunes → Empezar → marcar una serie.
   5. Terminar → Resumen.
 
+### Modo coach a distancia (v1.2.0)
+
+- **Cifrado** (`:core`):
+  - Un mensaje cifrado se abre con su llave y con ninguna otra.
+  - Si alguien altera una sola letra, el mensaje se rechaza.
+  - El texto cifrado no deja ver nombres ni ejercicios.
+  - Un plan completo (30 días × 6 ejercicios) comprimido ocupa menos de 20 KB.
+- **Código QR**: se puede leer solo o pegado dentro de un mensaje de WhatsApp. Ocupa menos de 1200 caracteres, así que entra holgado en un QR. Un código inventado se rechaza.
+- **Dos celulares simulados** (alumno y coach, cada uno con su base de datos), unidos por un buzón falso que se comporta como ntfy.sh:
+  1. Al vincular, el coach recibe el perfil completo: peso, nivel, fecha de nacimiento y lesiones. Al alumno le aparece "Coach vinculado". Escanear el mismo QR dos veces no duplica al alumno.
+  2. El coach crea un ejercicio que no existe, con foto, lo pone en el plan con 5×6–8, 42,5 kg y una nota, y envía el plan.
+     - Al alumno le llega para aceptar.
+     - El coach ve primero "le llegó" y después "lo aceptó".
+     - El plan del alumno queda idéntico: mismos ejercicios, pesos, series, repeticiones y notas.
+     - El ejercicio propio llega con su foto, byte por byte.
+  3. El alumno quita un ejercicio, cambia series y renombra un día. Al coach le llega **un solo aviso** con los tres cambios.
+     - Cambiar un plan propio (que no es del coach) no avisa a nadie.
+  4. **Reenvío**: el coach envía sin internet y el plan queda pendiente. Con internet sale solo. Si ntfy.sh borra el mensaje, se reenvía a las 2 h 30 min. Aunque llegue dos veces, el alumno lo ve una sola vez.
+  5. **Rechazar** avisa al coach. **Eliminar el perfil** del alumno termina la vinculación en los dos celulares; el alumno sigue en el celular del coach.
+  6. Los mensajes con otra llave, o que no son de Warriors Box, se ignoran.
+- **ntfy.sh real**: desde GitHub se publica un mensaje chico y uno grande (como adjunto) en un buzón aleatorio. Luego se recogen y se descifran.
+- **Emulador**: además de Usuarios y Rutinas, se abre la pantalla "Vincular alumno".
+
 ## Problemas encontrados y corregidos durante el desarrollo
 
 1. **Pesos iniciales demasiado bajos** para personas de nivel intermedio: se recalibraron por tipo de ejercicio y músculo.
@@ -80,6 +103,7 @@ Dónde se corrieron: GitHub Actions (servidores de GitHub), en el flujo **"Compi
 4. Formato de libras ("22.0 lb" → "22 lb").
 5. Una función de la barra de semanas era "experimental" y no compilaba: se marcó correctamente.
 6. **Prueba de pantallas**: tocaba "Siguiente" una vez menos de lo necesario y tocaba "Empezar" antes de que se activara. Eran errores de la prueba, no de la app, y se corrigieron.
+7. **ntfy.sh tarda unos segundos** en devolver un mensaje recién publicado: la prueba real reintenta durante 20 segundos. En la app no afecta, porque el buzón se revisa al abrirla, cada 5 segundos mientras se muestra el QR y cada hora en segundo plano.
 
 ## Emuladores
 
@@ -105,4 +129,10 @@ Resultado del 30/09/2026: ✅ pasó en las 4 versiones.
   3. Abrir la app: debe aparecer "Nueva versión disponible".
   4. Tocar Actualizar y verificar que el usuario sigue ahí.
 - **Sincronización con wger**: no se pudo probar contra el servidor real, porque el entorno de desarrollo no tenía acceso a wger.de. Se probó con una muestra de su formato. Si wger cambia su formato, la sincronización lo ignora sin romper la app.
+- **Modo coach con dos celulares reales**: la cámara, el escaneo del QR y las notificaciones se deben probar a mano. Prueba sugerida:
+  1. En el celular A, abrir el perfil del alumno → "Vincular con mi coach".
+  2. En el celular B, ir a Usuarios → "Soy coach: vincular alumno" → Escanear.
+  3. En B, generar el plan → "Enviar plan".
+  4. En A, cerrar y abrir la app. Debe aparecer "Plan nuevo de tu coach" → Aceptar.
+  5. En A, cambiar un ejercicio. En B, al abrir la app debe llegar el aviso con el cambio (puede tardar hasta 1 minuto).
 - **Temporizador de descanso**: con la app en segundo plano, el aviso usa una alarma "no exacta" y puede llegar algunos segundos tarde.
