@@ -28,6 +28,8 @@ else:
 PY
 }
 tap_text "USUARIOS"; sleep 4; adb exec-out screencap -p > "smoke/usuarios-api-$API.png"
+tap_text "Soy coach"; sleep 4; adb exec-out screencap -p > "smoke/coach-api-$API.png"
+adb shell input keyevent KEYCODE_BACK; sleep 2
 adb shell input keyevent KEYCODE_BACK; sleep 2
 tap_text "RUTINAS"; sleep 4; adb exec-out screencap -p > "smoke/rutinas-api-$API.png"
 adb shell input keyevent KEYCODE_BACK; sleep 2
