@@ -59,6 +59,7 @@ import com.warriorsbox.app.data.db.PlanDayEntity
 import com.warriorsbox.app.data.db.PlanEntity
 import com.warriorsbox.app.data.db.PlanItemEntity
 import com.warriorsbox.app.data.db.SessionEntity
+import com.warriorsbox.app.ui.coach.CoachPlanBanner
 import com.warriorsbox.app.ui.components.AppBackground
 import com.warriorsbox.app.ui.components.ConfirmDialog
 import com.warriorsbox.app.ui.components.TipBox
@@ -143,6 +144,15 @@ fun PlanScreen(
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<String?>(null) }
     var selectedWeek by remember { mutableStateOf<Int?>(null) }
+    val coachState by c.coach.state.collectAsStateWithLifecycle()
+    val fromCoach = coachState.coachPlan(ui.plan?.id)
+    // Plan del coach: antes de cambiarlo se avisa una vez que al coach le llegará el detalle.
+    var coachWarned by remember { mutableStateOf(false) }
+    var pendingEdit by remember { mutableStateOf<Long?>(null) }
+    val coachNote = fromCoach?.let { "\n\nEste plan lo armó tu coach ${it.coachName}: le llegará un aviso." }.orEmpty()
+    val editDay: (Long) -> Unit = { id ->
+        guard.run { if (fromCoach != null && !coachWarned) pendingEdit = id else onEditDay(id) }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch {
@@ -203,39 +213,55 @@ fun PlanScreen(
                 }
             },
         ) { padding ->
-            when {
-                ui.loading -> Column(Modifier.padding(padding).fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                }
-                ui.plan == null -> Column(Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    WbCard {
-                        Text("Todavía no hay plan", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            "Warriors Box arma un plan realista de 5 semanas × 6 días según el perfil: nivel, días disponibles, " +
-                                "objetivo, equipo y lesiones. Funciona sin internet.",
-                        )
-                        Button(
-                            onClick = { guard.run { vm.generate(false) } },
-                            enabled = !vm.generating,
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("generar_plan"),
-                        ) { Text(if (vm.generating) "Generando…" else "Generar mi plan") }
-                        OutlinedButton(
-                            onClick = { guard.run { vm.createCustom() } },
-                            enabled = !vm.generating,
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("rutina_propia"),
-                        ) { Text("Armar mi propia rutina") }
-                        Text(
-                            "Con \"Armar mi propia rutina\" eliges tú cada ejercicio, sus series, repeticiones y peso.",
-                            style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp),
-                        )
+            Column(Modifier.padding(padding)) {
+                if (!ui.loading) CoachPlanBanner(userId, ui.plan?.id, user?.name.orEmpty())
+                when {
+                    ui.loading -> Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
                     }
+                    ui.plan == null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        WbCard {
+                            Text("Todavía no hay plan", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "Warriors Box arma un plan realista de 5 semanas × 6 días según el perfil: nivel, días disponibles, " +
+                                    "objetivo, equipo y lesiones. Funciona sin internet.",
+                            )
+                            Button(
+                                onClick = { guard.run { vm.generate(false) } },
+                                enabled = !vm.generating,
+                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("generar_plan"),
+                            ) { Text(if (vm.generating) "Generando…" else "Generar mi plan") }
+                            OutlinedButton(
+                                onClick = { guard.run { vm.createCustom() } },
+                                enabled = !vm.generating,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("rutina_propia"),
+                            ) { Text("Armar mi propia rutina") }
+                            Text(
+                                "Con \"Armar mi propia rutina\" eliges tú cada ejercicio, sus series, repeticiones y peso.",
+                                style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp),
+                            )
+                        }
+                    }
+                    else -> PlanContent(ui, week, currentWeek, Modifier, onSelectWeek = { selectedWeek = it }, onOpenDay = onOpenDay, onEditDay = editDay)
                 }
-                else -> PlanContent(ui, week, currentWeek, Modifier.padding(padding), onSelectWeek = { selectedWeek = it }, onOpenDay = onOpenDay,
-                    onEditDay = { id -> guard.run { onEditDay(id) } })
             }
         }
     }
     guardDialog()
+    pendingEdit?.let { id ->
+        ConfirmDialog(
+            "Plan de tu coach",
+            "Este plan lo armó tu coach ${fromCoach?.coachName.orEmpty()}. Puedes cambiarlo, pero le llegará un aviso con cada cambio " +
+                "(qué ejercicio, series, repeticiones o peso cambiaste). ¿Seguro que quieres cambiarlo?",
+            "Sí, cambiar",
+            {
+                pendingEdit = null
+                coachWarned = true
+                onEditDay(id)
+            },
+            { pendingEdit = null },
+        )
+    }
 
     vm.lastResult?.let { (summary, warnings) ->
         AlertDialog(
@@ -248,16 +274,16 @@ fun PlanScreen(
     when (confirm) {
         "propia" -> ConfirmDialog(
             "Armar mi propia rutina", "Se crea una rutina vacía de 5 semanas × 6 días para que elijas cada ejercicio. " +
-                "El plan actual se reemplaza; las sesiones ya registradas se conservan en el historial.",
+                "El plan actual se reemplaza; las sesiones ya registradas se conservan en el historial." + coachNote,
             "Crear", { confirm = null; vm.createCustom() }, { confirm = null },
         )
         "ciclo" -> ConfirmDialog(
-            "Nuevo ciclo", "Se crea un plan nuevo de 5 semanas partiendo de los últimos pesos que usaste. El historial se conserva.",
+            "Nuevo ciclo", "Se crea un plan nuevo de 5 semanas partiendo de los últimos pesos que usaste. El historial se conserva." + coachNote,
             "Crear", { confirm = null; vm.generate(true) }, { confirm = null },
         )
         "regenerar" -> ConfirmDialog(
             "Regenerar plan", "Se reemplaza el plan actual por uno nuevo según el perfil. Las sesiones ya registradas se conservan en el historial, " +
-                "pero los cambios manuales del plan actual se pierden.",
+                "pero los cambios manuales del plan actual se pierden." + coachNote,
             "Regenerar", { confirm = null; vm.generate(false) }, { confirm = null },
         )
     }

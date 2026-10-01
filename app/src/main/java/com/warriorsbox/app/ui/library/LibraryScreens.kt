@@ -84,7 +84,7 @@ enum class BodyPart(val label: String, val muscles: Set<Muscle>) {
         e.primaryMuscles.any { it in muscles } || (this == CARDIO && e.pattern == MovementPattern.CARDIO)
 }
 
-private fun normalize(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+internal fun normalize(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 
 @Composable
 fun LibraryScreen(
@@ -241,9 +241,16 @@ fun ExerciseDetailScreen(exerciseId: String, onBack: () -> Unit, onProgress: (()
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ExerciseImage(e, Modifier.weight(1f).height(170.dp), index = 0)
-                    if (e.imageUrls.size > 1) ExerciseImage(e, Modifier.weight(1f).height(170.dp), index = 1)
+                if (e.image == null && e.imageUrls.size > 2) {
+                    // Ejercicios propios con varias fotos: se deslizan de costado.
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(e.imageUrls.size) { i -> ExerciseImage(e, Modifier.size(width = 240.dp, height = 200.dp), index = i) }
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ExerciseImage(e, Modifier.weight(1f).height(170.dp), index = 0)
+                        if (e.imageUrls.size > 1) ExerciseImage(e, Modifier.weight(1f).height(170.dp), index = 1)
+                    }
                 }
                 WbCard {
                     Text(e.name, style = MaterialTheme.typography.titleLarge)
@@ -281,61 +288,5 @@ fun ExerciseDetailScreen(exerciseId: String, onBack: () -> Unit, onProgress: (()
                 onBack()
             }
         }, { confirmDelete = false })
-    }
-}
-
-@Composable
-fun CustomExerciseScreen(onBack: () -> Unit) {
-    val c = container()
-    val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
-    val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf("") }
-    var pattern by remember { mutableStateOf(MovementPattern.ISOLATION) }
-    var muscle by remember { mutableStateOf(Muscle.CHEST) }
-    var equipment by remember { mutableStateOf(setOf<Equipment>()) }
-    var level by remember { mutableStateOf(Level.BEGINNER) }
-    var steps by remember { mutableStateOf("") }
-    var timed by remember { mutableStateOf(false) }
-    AppBackground(settings.backgroundPath, settings.veil) {
-        Scaffold(containerColor = Color.Transparent, contentColor = Color.White, topBar = { WbTopBar("Ejercicio propio", onBack) }) { padding ->
-            Column(
-                Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                WbCard {
-                    OutlinedTextField(name, { name = it }, label = { Text("Nombre *") }, modifier = Modifier.fillMaxWidth())
-                    Text("Tipo de movimiento", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-                    ChoiceChips(MovementPattern.entries, setOf(pattern), { it.label }, { pattern = it })
-                    Text("Músculo principal", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-                    ChoiceChips(Muscle.entries, setOf(muscle), { it.label }, { muscle = it })
-                    Text("Equipo (vacío = sin equipo)", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-                    ChoiceChips(Equipment.entries.filter { it != Equipment.NONE }, equipment, { it.label }, { e -> equipment = if (e in equipment) equipment - e else equipment + e })
-                    Text("Nivel", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-                    ChoiceChips(Level.entries, setOf(level), { it.label }, { level = it })
-                    ChoiceChips(listOf(false, true), setOf(timed), { if (it) "Por tiempo" else "Por repeticiones" }, { timed = it })
-                    OutlinedTextField(steps, { steps = it }, label = { Text("Instrucciones (una por línea)") }, modifier = Modifier.fillMaxWidth().height(140.dp))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Cancelar") }
-                    Button(
-                        enabled = name.isNotBlank(),
-                        onClick = {
-                            val id = "propio-" + normalize(name).replace(Regex("[^a-z0-9]+"), "-").trim('-') + "-" + (System.currentTimeMillis() % 100000)
-                            scope.launch {
-                                c.exercises.saveCustom(
-                                    Exercise(
-                                        id = id, name = name.trim(), pattern = pattern, primaryMuscles = listOf(muscle), equipment = equipment,
-                                        level = level, compound = pattern !in setOf(MovementPattern.ISOLATION, MovementPattern.CORE, MovementPattern.CARDIO),
-                                        steps = steps.lines().map { it.trim() }.filter { it.isNotEmpty() }, timed = timed, custom = true, rank = 5000,
-                                    ),
-                                )
-                                onBack()
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Guardar") }
-                }
-            }
-        }
     }
 }

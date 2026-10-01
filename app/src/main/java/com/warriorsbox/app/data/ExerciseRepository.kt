@@ -35,8 +35,28 @@ class ExerciseRepository(private val context: Context, private val extraDao: Ext
         }.also { builtIn = it }
     }
 
+    private val photosDir get() = java.io.File(context.filesDir, "photos")
+
     private fun decodeExtras(list: List<ExerciseExtraEntity>): List<Exercise> =
         list.mapNotNull { runCatching { Catalog.json.decodeFromString(Exercise.serializer(), it.json) }.getOrNull() }
+            .map { e -> if (e.imageUrls.none { it.startsWith("file:") }) e else e.copy(imageUrls = e.imageUrls.map(::localPhoto)) }
+
+    /** Las fotos propias guardan la ruta completa; si la carpeta cambió (copia restaurada), se corrige. */
+    private fun localPhoto(url: String): String {
+        if (!url.startsWith("file:")) return url
+        val file = java.io.File(url.removePrefix("file://").removePrefix("file:"))
+        if (file.exists()) return url
+        return "file://" + java.io.File(photosDir, file.name).absolutePath
+    }
+
+    /** true si el ejercicio viene con la app (todos los celulares lo tienen). */
+    suspend fun isBuiltIn(id: String): Boolean = builtIn().any { it.id == id }
+
+    /** Fotos propias (archivos del celular) de un ejercicio. */
+    fun localPhotoFiles(exercise: Exercise): List<java.io.File> =
+        exercise.imageUrls.filter { it.startsWith("file:") }
+            .map { java.io.File(localPhoto(it).removePrefix("file://")) }
+            .filter { it.exists() }
 
     /** Todos los ejercicios. Los propios y sincronizados que repitan id reemplazan al de fábrica. */
     val all: Flow<List<Exercise>> = combine(
@@ -66,7 +86,10 @@ class ExerciseRepository(private val context: Context, private val extraDao: Ext
         extraDao.upsert(listOf(ExerciseExtraEntity(stored.id, Catalog.json.encodeToString(Exercise.serializer(), stored), "propio")))
     }
 
-    suspend fun deleteCustom(id: String) = extraDao.delete(id)
+    suspend fun deleteCustom(id: String) {
+        get(id)?.let { e -> localPhotoFiles(e).filter { it.parentFile == photosDir }.forEach { it.delete() } }
+        extraDao.delete(id)
+    }
 
     suspend fun saveSynced(list: List<Exercise>, source: String) {
         if (list.isEmpty()) return

@@ -99,8 +99,21 @@ class BackupReminderWorker(context: Context, params: WorkerParameters) : Corouti
     }
 }
 
+/**
+ * Modo coach: envía lo pendiente y recoge planes, confirmaciones y avisos del buzón.
+ * Corre cada hora con internet, y también poco después de cada cambio.
+ */
+class CoachSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val c = (applicationContext as WarriorsApp).container
+        val result = c.coach.sync()
+        return if (result.offline && c.coach.hasPendingDeliveries()) Result.retry() else Result.success()
+    }
+}
+
 object WorkScheduler {
     const val SYNC_NOW = "sincronizar-ahora"
+    private const val COACH_SOON = "coach-pronto"
 
     fun scheduleAll(context: Context) {
         val wm = WorkManager.getInstance(context)
@@ -117,8 +130,21 @@ object WorkScheduler {
                 .setInitialDelay(1, TimeUnit.DAYS).build(),
         )
         wm.enqueueUniquePeriodicWork(
+            "coach-buzon", ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<CoachSyncWorker>(1, TimeUnit.HOURS).setConstraints(network).build(),
+        )
+        wm.enqueueUniquePeriodicWork(
             "recordar-copia", ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<BackupReminderWorker>(7, TimeUnit.DAYS).setInitialDelay(7, TimeUnit.DAYS).build(),
+        )
+    }
+
+    fun coachSyncSoon(context: Context, delaySeconds: Long) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            COACH_SOON, androidx.work.ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<CoachSyncWorker>()
+                .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build(),
         )
     }
 

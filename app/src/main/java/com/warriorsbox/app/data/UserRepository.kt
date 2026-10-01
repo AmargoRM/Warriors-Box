@@ -43,7 +43,11 @@ class UserRepository(private val db: AppDatabase, private val photos: PhotoStore
         id
     }
 
+    /** Se llama antes de borrar un usuario (el modo coach avisa al otro celular). */
+    var deleteListener: (suspend (Long) -> Unit)? = null
+
     suspend fun delete(user: UserEntity) {
+        runCatching { deleteListener?.invoke(user.id) }
         photos.delete(user.photoPath)
         photos.delete(user.backgroundPath)
         dao.delete(user.id)

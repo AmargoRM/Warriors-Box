@@ -13,6 +13,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.warriorsbox.app.LaunchRequest
+import com.warriorsbox.app.ui.coach.CoachDialogsHost
+import com.warriorsbox.app.ui.coach.CoachInviteScreen
+import com.warriorsbox.app.ui.coach.CoachLinkScreen
 import com.warriorsbox.app.ui.components.container
 import com.warriorsbox.app.ui.history.HistoryScreen
 import com.warriorsbox.app.ui.history.ProgressScreen
@@ -53,6 +56,8 @@ object Routes {
     const val REMINDERS = "recordatorios/{userId}"
     const val TRAINER = "entrenador"
     const val ABOUT = "acerca"
+    const val COACH_INVITE = "coach/invitar/{userId}"
+    const val COACH_LINK = "coach/vincular"
 
     fun userEdit(id: Long) = "usuario/editar/$id"
     fun userDetail(id: Long) = "usuario/$id"
@@ -65,6 +70,7 @@ object Routes {
     fun history(userId: Long) = "historial/$userId"
     fun progress(userId: Long, exerciseId: String) = "progreso/$userId/${android.net.Uri.encode(exerciseId)}"
     fun reminders(userId: Long) = "recordatorios/$userId"
+    fun coachInvite(userId: Long) = "coach/invitar/$userId"
 
     /** Clave del resultado de la biblioteca en modo "elegir". Valor: "<pick>|<exerciseId>". */
     const val PICK_RESULT = "ejercicio_elegido"
@@ -90,6 +96,7 @@ fun WarriorsNavHost(
     }
 
     UpdateDialogHost(forceOpen = showUpdate, onClosed = { showUpdate = false })
+    CoachDialogsHost(onOpenPlan = { userId -> nav.navigate(Routes.plan(userId)) { launchSingleTop = true } })
 
     val back: () -> Unit = { nav.popBackStack() }
     val longArg = { name: String -> navArgument(name) { type = NavType.LongType } }
@@ -107,6 +114,7 @@ fun WarriorsNavHost(
                 onBack = back,
                 onAdd = { nav.navigate(Routes.userEdit(0)) },
                 onOpen = { nav.navigate(Routes.userDetail(it)) },
+                onLinkStudent = { nav.navigate(Routes.COACH_LINK) },
             )
         }
         composable(Routes.USER_EDIT, listOf(longArg("userId"))) { entry ->
@@ -128,7 +136,20 @@ fun WarriorsNavHost(
                 onPlan = { nav.navigate(Routes.plan(id)) },
                 onHistory = { nav.navigate(Routes.history(id)) },
                 onReminders = { nav.navigate(Routes.reminders(id)) },
+                onCoachInvite = { nav.navigate(Routes.coachInvite(id)) },
                 onDeleted = { nav.popBackStack() },
+            )
+        }
+        composable(Routes.COACH_INVITE, listOf(longArg("userId"))) { entry ->
+            CoachInviteScreen(userId = entry.arguments?.getLong("userId") ?: 0, onBack = back)
+        }
+        composable(Routes.COACH_LINK) {
+            CoachLinkScreen(
+                onBack = back,
+                onLinked = { id ->
+                    nav.popBackStack()
+                    nav.navigate(Routes.userDetail(id))
+                },
             )
         }
         composable(Routes.PICK_USER) {
@@ -252,6 +273,7 @@ fun WarriorsNavHost(
                 onBack = back,
                 onStudent = { nav.navigate(Routes.userDetail(it)) },
                 onPlan = { nav.navigate(Routes.plan(it)) },
+                onLinkStudent = { nav.navigate(Routes.COACH_LINK) },
             )
         }
         composable(Routes.ABOUT) { AboutScreen(onBack = back, sources = c.exercises.sources) }

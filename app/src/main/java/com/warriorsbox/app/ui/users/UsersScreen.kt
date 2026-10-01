@@ -9,17 +9,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -49,6 +53,9 @@ import com.warriorsbox.app.ui.components.WbCard
 import com.warriorsbox.app.ui.components.WbTopBar
 import com.warriorsbox.app.ui.components.container
 import com.warriorsbox.app.ui.components.rememberTrainerGuard
+import com.warriorsbox.app.ui.theme.WbGold
+import com.warriorsbox.app.ui.theme.WbRed
+import com.warriorsbox.core.coach.Role
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -72,10 +79,11 @@ fun userSubtitle(user: UserEntity): String = listOfNotNull(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun UsersScreen(onBack: () -> Unit, onAdd: () -> Unit, onOpen: (Long) -> Unit) {
+fun UsersScreen(onBack: () -> Unit, onAdd: () -> Unit, onOpen: (Long) -> Unit, onLinkStudent: () -> Unit) {
     val c = container()
     val users by c.users.users.collectAsStateWithLifecycle(emptyList())
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
+    val coach by c.coach.state.collectAsStateWithLifecycle()
     var toDelete by remember { mutableStateOf<UserEntity?>(null) }
     val scope = rememberCoroutineScope()
     val (guard, guardDialog) = rememberTrainerGuard()
@@ -95,8 +103,9 @@ fun UsersScreen(onBack: () -> Unit, onAdd: () -> Unit, onOpen: (Long) -> Unit) {
             },
         ) { padding ->
             if (users.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(padding)) {
+                Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
                     EmptyState("Todavía no hay usuarios.\nToca \"Agregar\" para crear el primero.")
+                    LinkStudentButton { guard.run(onLinkStudent) }
                 }
             } else {
                 LazyColumn(
@@ -104,6 +113,7 @@ fun UsersScreen(onBack: () -> Unit, onAdd: () -> Unit, onOpen: (Long) -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.padding(padding),
                 ) {
+                    item { LinkStudentButton { guard.run(onLinkStudent) } }
                     items(users, key = { it.id }) { user ->
                         WbCard(
                             Modifier.combinedClickable(
@@ -116,11 +126,19 @@ fun UsersScreen(onBack: () -> Unit, onAdd: () -> Unit, onOpen: (Long) -> Unit) {
                                 Column(Modifier.padding(start = 14.dp).weight(1f)) {
                                     Text(user.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Text(userSubtitle(user), style = MaterialTheme.typography.bodyMedium)
+                                    when (coach.linkOf(user.id)?.role) {
+                                        Role.COACH -> Text("Alumno a distancia", color = WbGold, style = MaterialTheme.typography.labelMedium)
+                                        Role.STUDENT -> Text("Con coach", color = WbGold, style = MaterialTheme.typography.labelMedium)
+                                        null -> Unit
+                                    }
                                 }
+                                IconButton(
+                                    onClick = { guard.run { toDelete = user } },
+                                    modifier = Modifier.testTag("eliminar_${user.id}"),
+                                ) { Icon(Icons.Filled.Delete, contentDescription = "Eliminar a ${user.name}", tint = WbRed) }
                             }
                         }
                     }
-                    item { Text("Mantén presionado un usuario para eliminarlo.", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(8.dp).width(300.dp)) }
                 }
             }
         }
@@ -138,5 +156,14 @@ fun UsersScreen(onBack: () -> Unit, onAdd: () -> Unit, onOpen: (Long) -> Unit) {
             },
             onDismiss = { toDelete = null },
         )
+    }
+}
+
+/** Entrada para el coach: escanear el QR del alumno. */
+@Composable
+private fun LinkStudentButton(onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag("vincular_alumno")) {
+        Icon(Icons.Filled.QrCodeScanner, null)
+        Text("  Soy coach: vincular alumno (QR)")
     }
 }

@@ -160,7 +160,7 @@ fun RemindersScreen(userId: Long, onBack: () -> Unit) {
 }
 
 @Composable
-fun TrainerPanelScreen(onBack: () -> Unit, onStudent: (Long) -> Unit, onPlan: (Long) -> Unit) {
+fun TrainerPanelScreen(onBack: () -> Unit, onStudent: (Long) -> Unit, onPlan: (Long) -> Unit, onLinkStudent: () -> Unit) {
     val c = container()
     val settings by c.settings.settings.collectAsStateWithLifecycle(AppSettings())
     val users by c.users.users.collectAsStateWithLifecycle(emptyList())
@@ -172,6 +172,7 @@ fun TrainerPanelScreen(onBack: () -> Unit, onStudent: (Long) -> Unit, onPlan: (L
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Button(onClick = onLinkStudent, modifier = Modifier.fillMaxWidth()) { Text("Vincular alumno a distancia (QR)") }
                 if (students.isEmpty()) Text("Sin alumnos todavía.", color = Color.White)
                 students.sortedByDescending { it.alerts.size }.forEach { s ->
                     WbCard(highlight = s.alerts.isNotEmpty()) {
@@ -193,7 +194,10 @@ fun TrainerPanelScreen(onBack: () -> Unit, onStudent: (Long) -> Unit, onPlan: (L
                         }
                     }
                 }
-                TipBox("Para pasar un plan a otro celular: abre el plan del alumno → menú ⋮ → Exportar plan, y envía el archivo por WhatsApp o correo.")
+                TipBox(
+                    "Alumno en otro celular: toca \"Vincular alumno a distancia\" y escanea su QR. Luego arma su plan y toca \"Enviar plan\": " +
+                        "le llega dentro de la app para aceptarlo. También puedes usar el menú ⋮ del plan → Exportar plan (archivo).",
+                )
             }
         }
     }

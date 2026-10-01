@@ -19,10 +19,13 @@ object Notifier {
     const val CHANNEL_REST = "descanso"
     const val CHANNEL_UPDATES = "actualizaciones"
     const val CHANNEL_BACKUP = "respaldo"
+    const val CHANNEL_COACH = "coach"
 
     const val ID_REST = 1001
     const val ID_UPDATE = 1002
     const val ID_BACKUP = 1003
+    const val ID_COACH_PLAN = 1004
+    const val ID_COACH_ALERT = 1005
     const val ID_REMINDER_BASE = 2000
     const val ID_MISSED_BASE = 3000
 
@@ -41,6 +44,7 @@ object Notifier {
                 },
                 NotificationChannel(CHANNEL_UPDATES, "Nuevas versiones", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CHANNEL_BACKUP, "Copias de seguridad", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_COACH, "Coach a distancia", NotificationManager.IMPORTANCE_DEFAULT),
             ),
         )
     }

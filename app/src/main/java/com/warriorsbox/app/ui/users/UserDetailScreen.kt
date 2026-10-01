@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,10 +32,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.warriorsbox.app.data.AppSettings
 import com.warriorsbox.app.data.db.MeasurementEntity
+import com.warriorsbox.app.ui.coach.CoachCard
 import com.warriorsbox.app.ui.components.AppBackground
 import com.warriorsbox.app.ui.components.ConfirmDialog
 import com.warriorsbox.app.ui.components.LabeledRow
@@ -59,6 +62,7 @@ fun UserDetailScreen(
     onPlan: () -> Unit,
     onHistory: () -> Unit,
     onReminders: () -> Unit,
+    onCoachInvite: () -> Unit,
     onDeleted: () -> Unit,
 ) {
     val c = container()
@@ -85,6 +89,9 @@ fun UserDetailScreen(
             topBar = {
                 WbTopBar(u?.name ?: "Usuario", onBack) {
                     IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, "Editar") }
+                    IconButton(onClick = { confirmDelete = true }, modifier = Modifier.testTag("eliminar_perfil")) {
+                        Icon(Icons.Filled.Delete, "Eliminar perfil", tint = WbRed)
+                    }
                 }
             },
         ) { padding ->
@@ -107,6 +114,8 @@ fun UserDetailScreen(
                     OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f)) { Text("Historial") }
                 }
                 OutlinedButton(onClick = onReminders, modifier = Modifier.fillMaxWidth()) { Text("Recordatorios de entrenamiento") }
+
+                CoachCard(userId = u.id, userName = u.name, onInvite = onCoachInvite, onPlan = onPlan)
 
                 WbCard {
                     SectionTitle("Perfil")
@@ -167,8 +176,9 @@ fun UserDetailScreen(
                     }
                 }
 
-                TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Eliminar usuario", color = WbRed)
+                OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                    Icon(Icons.Filled.Delete, null, tint = WbRed)
+                    Text("  Eliminar perfil", color = WbRed)
                 }
             }
         }
@@ -205,7 +215,9 @@ fun UserDetailScreen(
     if (confirmDelete && u != null) {
         ConfirmDialog(
             title = "¿Eliminar a ${u.name}?",
-            text = "Se borrará su perfil y TODO su historial. Esto no se puede deshacer, salvo que tengas una copia de seguridad.",
+            text = "Se borrará su perfil y TODO su historial: planes, sesiones, récords y medidas. " +
+                "Esto no se puede deshacer, salvo que tengas una copia de seguridad." +
+                if (c.coach.linkOf(u.id) != null) " También se termina la vinculación con el otro celular." else "",
             confirm = "Eliminar",
             onConfirm = {
                 confirmDelete = false

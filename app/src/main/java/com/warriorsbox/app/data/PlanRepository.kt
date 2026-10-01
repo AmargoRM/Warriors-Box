@@ -7,7 +7,10 @@ import com.warriorsbox.app.data.db.PlanEntity
 import com.warriorsbox.app.data.db.PlanItemEntity
 import com.warriorsbox.app.data.db.SessionEntity
 import com.warriorsbox.app.data.db.SetLogEntity
+import com.warriorsbox.core.coach.CoachPlan
 import com.warriorsbox.core.engine.PlanGenerator
+import com.warriorsbox.core.engine.Reminders
+import com.warriorsbox.core.engine.Units
 import com.warriorsbox.core.engine.Progression
 import com.warriorsbox.core.engine.WeightMath
 import com.warriorsbox.core.model.Exercise
@@ -65,6 +68,26 @@ class PlanRepository(
     private val sessionDao = db.sessions()
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
+    /**
+     * Se llama con cada cambio manual a un plan (planId, descripción legible). Lo usa el modo coach
+     * para avisarle al coach cuando el alumno modifica el plan que le mandó.
+     */
+    var changeListener: (suspend (planId: Long, change: String) -> Unit)? = null
+
+    private suspend fun changed(planId: Long, text: String) {
+        runCatching { changeListener?.invoke(planId, text) }
+    }
+
+    private fun dayLabel(day: PlanDayEntity): String =
+        "${Reminders.PLAN_DAY_NAMES.getOrElse(day.dayIndex) { "Día" }}, semana ${day.week}"
+
+    private suspend fun exerciseName(id: String): String = exercises.get(id)?.name ?: id
+
+    private suspend fun planReplaced(userId: Long, how: String) {
+        val old = dao.activePlan(userId) ?: return
+        changed(old.id, how)
+    }
+
     fun activePlan(userId: Long): Flow<PlanEntity?> = dao.observeActivePlan(userId)
     suspend fun activePlanNow(userId: Long): PlanEntity? = dao.activePlan(userId)
     fun days(planId: Long): Flow<List<PlanDayEntity>> = dao.observeDays(planId)
@@ -84,6 +107,7 @@ class PlanRepository(
         val cycle = if (newCycle) (dao.maxCycle(userId) ?: 0) + 1 else (dao.maxCycle(userId) ?: 0).coerceAtLeast(1)
         val previousWeights = if (newCycle) lastWeights(userId) else emptyMap()
         val generated = PlanGenerator.generate(profile, catalog, variation = cycle - 1, previousWeights = previousWeights)
+        planReplaced(userId, if (newCycle) "Empezó un ciclo nuevo generado por la app (reemplaza tu plan)." else "Reemplazó tu plan por uno generado por la app.")
         val planId = db.withTransaction {
             dao.deactivatePlans(userId)
             val planId = dao.insertPlan(
@@ -111,7 +135,12 @@ class PlanRepository(
      * Rutina armada por el usuario: plan vacío de 5 semanas × 6 días. Los días sin ejercicios
      * cuentan como descanso; al agregar ejercicios pasan a ser días de entrenamiento.
      */
-    suspend fun createCustom(userId: Long): Long = db.withTransaction {
+    suspend fun createCustom(userId: Long): Long {
+        planReplaced(userId, "Reemplazó tu plan por una rutina armada por su cuenta.")
+        return createCustomPlan(userId)
+    }
+
+    private suspend fun createCustomPlan(userId: Long): Long = db.withTransaction {
         dao.deactivatePlans(userId)
         val planId = dao.insertPlan(
             PlanEntity(
@@ -128,7 +157,9 @@ class PlanRepository(
 
     suspend fun renameDay(dayId: Long, focus: String) {
         val day = dao.day(dayId) ?: return
-        dao.updateDay(day.copy(focus = focus.trim().ifBlank { day.focus }))
+        val newFocus = focus.trim().ifBlank { day.focus }
+        dao.updateDay(day.copy(focus = newFocus))
+        if (newFocus != day.focus) changed(day.planId, "${dayLabel(day)}: renombró \"${day.focus}\" a \"$newFocus\".")
     }
 
     /** Un día con ejercicios es de entrenamiento; uno vacío, de descanso. */
@@ -203,6 +234,13 @@ class PlanRepository(
      * (desde la actual) en el mismo día y posición; si no, solo en la sesión de hoy.
      */
     suspend fun substitute(item: PlanItemEntity, newExercise: Exercise, wholePlan: Boolean, sessionId: Long?, userId: Long) {
+        dao.day(item.dayId)?.let { day ->
+            changed(
+                day.planId,
+                "${dayLabel(day)}: no pudo hacer ${exerciseName(item.exerciseId)} y lo cambió por ${newExercise.name}" +
+                    if (wholePlan) " en todo el plan." else " solo por hoy.",
+            )
+        }
         db.withTransaction {
             if (sessionId != null) sessionDao.replaceExercise(sessionId, item.id, newExercise.id)
             if (!wholePlan) return@withTransaction
@@ -246,14 +284,35 @@ class PlanRepository(
             ),
         )
         syncDayKind(dayId)
+        day?.let { changed(it.planId, "${dayLabel(it)}: agregó ${exercise.name}.") }
     }
 
-    suspend fun updateItem(item: PlanItemEntity) = dao.updateItem(item)
+    suspend fun updateItem(item: PlanItemEntity) {
+        val before = dao.items(item.dayId).firstOrNull { it.id == item.id }
+        dao.updateItem(item)
+        val day = dao.day(item.dayId) ?: return
+        if (before != null && describe(before) != describe(item)) {
+            changed(day.planId, "${dayLabel(day)}: ${exerciseName(item.exerciseId)} pasó de ${describe(before)} a ${describe(item)}.")
+        }
+        if (before != null && before.trainerNote != item.trainerNote) {
+            changed(day.planId, "${dayLabel(day)}: cambió la nota de ${exerciseName(item.exerciseId)}.")
+        }
+    }
 
-    suspend fun removeItem(item: PlanItemEntity) = db.withTransaction {
-        dao.deleteItem(item)
-        dao.updateItems(dao.items(item.dayId).mapIndexed { i, it -> it.copy(position = i) })
-        syncDayKind(item.dayId)
+    /** "4×8–12 · 40 kg · 90 s" (para describir cambios). */
+    private fun describe(i: PlanItemEntity): String {
+        val reps = if (i.repsMin == i.repsMax) "${i.repsMin}" else "${i.repsMin}–${i.repsMax}"
+        val kg = if (i.weightKg > 0) " · " + Units.formatWeight(i.weightKg, false) else ""
+        return "${i.sets}×$reps$kg · ${i.restSec} s"
+    }
+
+    suspend fun removeItem(item: PlanItemEntity) {
+        db.withTransaction {
+            dao.deleteItem(item)
+            dao.updateItems(dao.items(item.dayId).mapIndexed { i, it -> it.copy(position = i) })
+            syncDayKind(item.dayId)
+        }
+        dao.day(item.dayId)?.let { changed(it.planId, "${dayLabel(it)}: quitó ${exerciseName(item.exerciseId)}.") }
     }
 
     suspend fun moveItem(item: PlanItemEntity, delta: Int) = db.withTransaction {
@@ -270,10 +329,21 @@ class PlanRepository(
         val profile = users.trainingProfile(userId)
         val weight = profile?.let { WeightMath.initialWeight(exercise, it) } ?: item.weightKg
         dao.updateItem(item.copy(exerciseId = exercise.id, weightKg = weight, originalExerciseId = item.originalExerciseId ?: item.exerciseId))
+        dao.day(item.dayId)?.let { changed(it.planId, "${dayLabel(it)}: cambió ${exerciseName(item.exerciseId)} por ${exercise.name}.") }
     }
 
     /** Copia los ejercicios de un día al mismo día de otras semanas (la semana de descarga se ajusta sola). */
-    suspend fun copyDayToWeeks(dayId: Long, weeks: List<Int>) = db.withTransaction {
+    suspend fun copyDayToWeeks(dayId: Long, weeks: List<Int>, report: Boolean = true) {
+        copyDay(dayId, weeks)
+        val source = dao.day(dayId) ?: return
+        val targets = weeks.filter { it != source.week }.sorted()
+        if (report && targets.isNotEmpty()) {
+            val plural = if (targets.size > 1) "s" else ""
+            changed(source.planId, "Copió ${dayLabel(source)} a la$plural semana$plural ${targets.joinToString(", ")}.")
+        }
+    }
+
+    private suspend fun copyDay(dayId: Long, weeks: List<Int>) = db.withTransaction {
         val source = dao.day(dayId) ?: return@withTransaction
         val items = dao.items(dayId)
         for (w in weeks) {
@@ -294,7 +364,8 @@ class PlanRepository(
     /** Duplica una semana completa sobre otra. */
     suspend fun duplicateWeek(planId: Long, fromWeek: Int, toWeek: Int) {
         val days = dao.days(planId).filter { it.week == fromWeek }
-        for (d in days) copyDayToWeeks(d.id, listOf(toWeek))
+        for (d in days) copyDayToWeeks(d.id, listOf(toWeek), report = false)
+        if (fromWeek != toWeek) changed(planId, "Copió la semana $fromWeek completa sobre la semana $toWeek.")
     }
 
     // ---------------------------------------------------------------- pasar planes entre celulares
@@ -317,6 +388,7 @@ class PlanRepository(
     suspend fun importPlan(userId: Long, text: String): Int {
         val file = json.decodeFromString(PlanTransferFile.serializer(), text)
         require(file.format == "warriors-box-plan") { "El archivo no es un plan de Warriors Box." }
+        planReplaced(userId, "Reemplazó tu plan por uno importado de un archivo.")
         val known = exercises.byId()
         var unknown = 0
         db.withTransaction {
@@ -336,6 +408,55 @@ class PlanRepository(
             }
         }
         return unknown
+    }
+
+    // ---------------------------------------------------------------- modo coach
+
+    /** Convierte un plan al formato que viaja al celular del alumno. */
+    suspend fun toCoachPlan(planId: Long): CoachPlan {
+        val plan = dao.plan(planId) ?: error("Plan no encontrado")
+        return CoachPlan(
+            summary = plan.summary,
+            days = dao.days(planId).map { d ->
+                CoachPlan.Day(
+                    week = d.week, dayIndex = d.dayIndex, focus = d.focus, optional = d.optional, deload = d.deload,
+                    items = dao.items(d.id).map {
+                        CoachPlan.Item(it.exerciseId, it.sets, it.repsMin, it.repsMax, it.targetReps, it.weightKg, it.restSec, it.trainerNote)
+                    },
+                )
+            },
+        )
+    }
+
+    /**
+     * Guarda el plan que mandó el coach y lo deja activo. No genera avisos de cambio (no los hizo el alumno).
+     * Devuelve el id del plan nuevo.
+     */
+    suspend fun importCoachPlan(userId: Long, plan: CoachPlan, coachName: String): Long {
+        val known = exercises.byId()
+        return db.withTransaction {
+            dao.deactivatePlans(userId)
+            val planId = dao.insertPlan(
+                PlanEntity(
+                    userId = userId,
+                    cycle = (dao.maxCycle(userId) ?: 0) + 1,
+                    summary = "Plan armado por tu coach $coachName." + if (plan.summary.isNotBlank()) "\n" + plan.summary else "",
+                ),
+            )
+            plan.days.forEach { d ->
+                val dayId = dao.insertDay(PlanDayEntity(planId = planId, week = d.week, dayIndex = d.dayIndex, focus = d.focus, optional = d.optional, deload = d.deload))
+                dao.insertItems(
+                    d.items.filter { it.exerciseId in known }.mapIndexed { i, it ->
+                        PlanItemEntity(
+                            dayId = dayId, position = i, exerciseId = it.exerciseId, sets = it.sets, repsMin = it.repsMin,
+                            repsMax = it.repsMax, targetReps = it.targetReps, weightKg = it.weightKg, restSec = it.restSec,
+                            reason = "Indicado por tu coach $coachName.", trainerNote = it.note,
+                        )
+                    },
+                )
+            }
+            planId
+        }
     }
 }
 
